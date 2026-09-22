@@ -1,0 +1,5 @@
+Image *.png
+photo_*.jpg
+.claude/
+.vercel/
+node_modules/

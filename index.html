@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>ARAX toamna</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --w:1085; --h:1450; }
+  html,body{margin:0;height:100%;background:#0b1a33;overflow:hidden;}
+  .viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  .stage{
+    position:relative;flex:none;width:calc(var(--w) * 1px);height:calc(var(--h) * 1px);
+    overflow:hidden;transform-origin:center center;background:#5aa9ff;
+  }
+  .layer{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+  img{display:block;user-select:none;-webkit-user-drag:none;}
+
+  /* ---------- background: slow drift ---------- */
+  .bg{ animation: bgZoom 18s ease-in-out infinite alternate; will-change:transform; }
+  .bg img{width:100%;height:100%;object-fit:cover;}
+  @keyframes bgZoom{ from{transform:scale(1.02) translateY(0)} to{transform:scale(1.08) translateY(-12px)} }
+
+  /* floor rings under the girl: perspective ellipses, blue/lime pairs, expanding outward */
+  .rings{position:absolute;left:0;top:0;width:1085px;height:1450px;overflow:visible;}
+  .rings .pair{transform-box:view-box;transform-origin:596px 1356px;opacity:0;
+    animation: pairOut var(--dur) cubic-bezier(.12,.6,.4,1) var(--delay) infinite;}
+  @keyframes pairOut{
+    0%{transform:scale(.1);opacity:0}
+    6%{opacity:1}
+    25%{opacity:.85}
+    50%{opacity:.45}
+    72%{opacity:.12}
+    82%{opacity:0}
+    100%{transform:scale(1);opacity:0}
+  }
+  .rings ellipse{fill:none;stroke-linecap:round;}
+  .rings .glow{opacity:.95;filter:url(#neon);mix-blend-mode:screen;}
+  .rings .core{stroke-width:7;}
+  .rings .green .core{stroke:#e6ff5c;stroke-width:8}
+  .rings .green .glow{stroke:#8ee81e;stroke-width:26}
+  .rings .blue  .core{stroke:#7cc8ff}
+  .rings .blue  .glow{stroke:#1e6cff;stroke-width:26}
+  .rings .spin{animation: dashSpin var(--spin) linear infinite;}
+  @keyframes dashSpin{to{stroke-dashoffset:-1200}}
+  /* soft floor glow under the rings */
+  .floorGlow{position:absolute;left:596px;top:1356px;width:700px;height:190px;transform:translate(-50%,-50%);
+    background:radial-gradient(ellipse at center,rgba(90,190,255,.55),rgba(140,255,90,.25) 40%,rgba(0,0,0,0) 70%);
+    mix-blend-mode:screen;opacity:.35;animation: glowPulse 3.2s ease-out 2.2s infinite;}
+  @keyframes glowPulse{0%{opacity:1}45%{opacity:.4}90%{opacity:.45}100%{opacity:1}}
+
+  /* ---------- falling leaves ---------- */
+  .leaves{overflow:hidden;}
+  .leaf{
+    position:absolute;top:-80px;width:34px;height:34px;opacity:0;
+    animation-name:fall;animation-timing-function:linear;animation-iteration-count:infinite;
+  }
+  .leaf svg{width:100%;height:100%;animation:spin 3s ease-in-out infinite alternate;}
+  @keyframes fall{
+    0%{transform:translate(0,0) rotate(0);opacity:0}
+    6%{opacity:.95}
+    50%{transform:translate(var(--sway),780px) rotate(180deg)}
+    92%{opacity:.9}
+    100%{transform:translate(calc(var(--sway) * -.6),1560px) rotate(360deg);opacity:0}
+  }
+  @keyframes spin{from{transform:rotateY(0) rotate(-20deg)}to{transform:rotateY(180deg) rotate(25deg)}}
+
+  /* ---------- cloud text ---------- */
+  .cloudWrap{
+    position:absolute;left:78px;top:24px;width:960px;
+    animation: floatCloud 7s ease-in-out infinite;
+  }
+  @keyframes floatCloud{ 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-10px) rotate(.3deg)} }
+  .cloudWrap img{width:100%;height:auto;}
+
+  /* misty haze layer: soft, wide, appears first */
+  .haze{
+    position:absolute;inset:-4%;width:108%;
+    filter:url(#boilSoft) blur(16px);
+    opacity:0; mix-blend-mode:screen;
+    animation: hazeIn 2.6s ease-out .3s forwards, hazeBreath 5s ease-in-out 3s infinite;
+  }
+  @keyframes hazeIn{ from{opacity:0;transform:scale(1.08)} to{opacity:.75;transform:scale(1)} }
+  @keyframes hazeBreath{ 0%,100%{opacity:.7} 50%{opacity:.5} }
+
+  /* crisp cloud text: forms out of the mist with a swept feather mask + boiling displacement */
+  .crisp{
+    position:relative;top:-44px;
+    filter:url(#boil);
+    -webkit-mask-image:linear-gradient(100deg,#000 0%,#000 30%,rgba(0,0,0,.6) 40%,transparent 55%);
+            mask-image:linear-gradient(100deg,#000 0%,#000 30%,rgba(0,0,0,.6) 40%,transparent 55%);
+    -webkit-mask-size:300% 100%; mask-size:300% 100%;
+    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    -webkit-mask-position:100% 0; mask-position:100% 0;
+    animation: reveal 3.4s cubic-bezier(.45,.05,.3,1) .5s forwards;
+    opacity:0;
+  }
+  @keyframes reveal{
+    0%{-webkit-mask-position:100% 0;mask-position:100% 0;opacity:0}
+    8%{opacity:1}
+    100%{-webkit-mask-position:0% 0;mask-position:0% 0;opacity:1}
+  }
+
+  /* drifting puffs around the letters */
+  .puff{
+    position:absolute;border-radius:50%;
+    background:radial-gradient(circle at 45% 40%,rgba(255,255,255,.95),rgba(255,255,255,.55) 35%,rgba(210,230,255,0) 70%);
+    filter:blur(14px);opacity:0;mix-blend-mode:screen;
+    animation: puff var(--d) ease-in-out var(--delay) infinite;
+  }
+  @keyframes puff{
+    0%{opacity:0;transform:translate(0,0) scale(.6)}
+    25%{opacity:.32}
+    60%{opacity:.22}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.25)}
+  }
+
+  /* ---------- girl ---------- */
+  .girl{
+    position:absolute;left:205px;top:535px;width:640px;
+    transform-origin:50% 100%;
+    opacity:0;
+    animation: girlIn 1.1s cubic-bezier(.2,.9,.25,1.25) 1.1s forwards, girlIdle 3.2s ease-in-out 2.2s infinite;
+    filter:drop-shadow(0 30px 30px rgba(0,20,60,.35));
+  }
+  .girl img{width:100%;height:auto;}
+  @keyframes girlIn{ from{opacity:0;transform:translateY(160px) scale(.9)} to{opacity:1;transform:translateY(6px) scale(1)} }
+  @keyframes girlIdle{
+    0%  {transform:translateY(6px) rotate(0)}          /* lowest point = ring spawn */
+    50% {transform:translateY(-16px) rotate(-.5deg)}   /* apex */
+    100%{transform:translateY(6px) rotate(0)}
+  }
+
+  /* light sparkle on the letters after they form */
+  .shine{
+    position:absolute;inset:0;
+    background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.55) 50%,transparent 60%);
+    background-size:250% 100%;background-position:120% 0;
+    mix-blend-mode:screen;opacity:0;
+    -webkit-mask-image:url(assets/cloud.png);mask-image:url(assets/cloud.png);
+    -webkit-mask-size:100% 100%;mask-size:100% 100%;
+    animation: shine 6s ease-in-out 4.5s infinite;
+  }
+  @keyframes shine{ 0%{opacity:0;background-position:120% 0} 10%{opacity:1} 30%{opacity:0;background-position:-30% 0} 100%{opacity:0;background-position:-30% 0} }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01s!important;animation-delay:0s!important}
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- boiling displacement for the crisp letters -->
+    <filter id="boil" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+      <feTurbulence id="boilT" type="fractalNoise" baseFrequency="0.011 0.016" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap id="boilD" in="SourceGraphic" in2="n" scale="90" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- stronger, slower displacement for the mist -->
+    <filter id="boilSoft" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence id="softT" type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap id="softD" in="SourceGraphic" in2="n" scale="60" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+    <filter id="neon" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+</svg>
+
+<div class="viewport">
+  <div class="stage" id="stage">
+    <div class="layer bg"><img src="assets/bg.png" alt=""></div>
+
+    <div class="layer">
+      <div class="floorGlow"></div>
+      <svg class="rings" viewBox="0 0 1085 1450" aria-hidden="true">
+      <g class="pair" style="--delay:2.2s;--dur:6.4s">
+        <g class="green">
+          <ellipse class="glow spin" cx="596" cy="1356" rx="292" ry="74" stroke-dasharray="760 70 420 90" style="--spin:18s"/>
+          <ellipse class="core spin" cx="596" cy="1356" rx="292" ry="74" stroke-dasharray="760 70 420 90" style="--spin:18s"/>
+        </g>
+        <g class="blue">
+          <ellipse class="glow spin" cx="596" cy="1356" rx="335" ry="85" stroke-dasharray="900 60 500 75" style="--spin:18s;animation-direction:reverse"/>
+          <ellipse class="core spin" cx="596" cy="1356" rx="335" ry="85" stroke-dasharray="900 60 500 75" style="--spin:18s;animation-direction:reverse"/>
+        </g>
+      </g>
+      <g class="pair" style="--delay:5.4s;--dur:6.4s">
+        <g class="green">
+          <ellipse class="glow spin" cx="596" cy="1356" rx="292" ry="74" stroke-dasharray="760 70 420 90" style="--spin:22s"/>
+          <ellipse class="core spin" cx="596" cy="1356" rx="292" ry="74" stroke-dasharray="760 70 420 90" style="--spin:22s"/>
+        </g>
+        <g class="blue">
+          <ellipse class="glow spin" cx="596" cy="1356" rx="335" ry="85" stroke-dasharray="900 60 500 75" style="--spin:22s;animation-direction:reverse"/>
+          <ellipse class="core spin" cx="596" cy="1356" rx="335" ry="85" stroke-dasharray="900 60 500 75" style="--spin:22s;animation-direction:reverse"/>
+        </g>
+      </g>
+      </svg>
+    </div>
+
+    <div class="layer leaves" id="leaves"></div>
+
+    <div class="cloudWrap">
+      <img class="haze" src="assets/cloud.png" alt="">
+      <div class="crisp">
+        <img src="assets/cloud.png" alt="internet de la 69 lei">
+        <div class="shine"></div>
+      </div>
+      <div class="puffs" id="puffs"></div>
+    </div>
+
+    <div class="girl"><img src="assets/girl.png" alt=""></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // fit stage to window
+  const stage=document.getElementById('stage');
+  const W=1085,H=1450;
+  function fit(){
+    const s=Math.min(innerWidth/W,innerHeight/H);
+    stage.style.transform='scale('+s+')';
+  }
+  addEventListener('resize',fit);fit();
+
+  // leaves
+  const leafSVG='<svg viewBox="0 0 100 100"><path fill="var(--c)" d="M50 5C52 18 56 24 62 28C66 20 72 16 80 14C76 22 76 30 78 36C86 34 94 36 98 42C90 46 86 52 86 58C80 56 74 58 70 62C76 68 78 74 76 82C68 78 60 78 54 82L52 97L48 97L46 82C40 78 32 78 24 82C22 74 24 68 30 62C26 58 20 56 14 58C14 52 10 46 2 42C6 36 14 34 22 36C24 30 24 22 20 14C28 16 34 20 38 28C44 24 48 18 50 5Z"/><path d="M50 12v84M50 40L64 30M50 40L36 30M50 58L74 50M50 58L26 50" stroke="rgba(110,45,0,.45)" stroke-width="2" fill="none"/></svg>';
+  const leaves=document.getElementById('leaves');
+  const cols=['#f0a12a','#e8762b','#d9541f','#f5c04a','#c8461a'];
+  for(let i=0;i<34;i++){
+    const l=document.createElement('div');l.className='leaf';
+    const sz=22+Math.random()*26;
+    l.style.left=(Math.random()*100)+'%';
+    l.style.width=l.style.height=sz+'px';
+    l.style.setProperty('--sway',(Math.random()*160-80)+'px');
+    l.style.setProperty('--c',cols[i%cols.length]);
+    l.style.animationDuration=(11+Math.random()*9)+'s';
+    l.style.animationDelay=(-Math.random()*20)+'s';
+    l.innerHTML=leafSVG;
+    l.querySelector('svg').style.animationDuration=(2+Math.random()*2)+'s';
+    leaves.appendChild(l);
+  }
+
+  // puffs around the text (positions in % of cloudWrap, roughly along letters and the swoosh)
+  const puffs=document.getElementById('puffs');
+  const spots=[[14,22],[26,16],[40,12],[56,10],[70,14],[20,42],[36,46],[50,40],[66,44],[82,30],[8,36],[60,54],[46,56],[30,55],[88,40],[76,50]];
+  spots.forEach((p,i)=>{
+    const d=document.createElement('i');d.className='puff';
+    const sz=90+Math.random()*120;
+    d.style.left=p[0]+'%';d.style.top=p[1]+'%';
+    d.style.width=d.style.height=sz+'px';
+    d.style.setProperty('--dx',(Math.random()*60-30)+'px');
+    d.style.setProperty('--dy',(-20-Math.random()*40)+'px');
+    d.style.setProperty('--d',(5+Math.random()*5)+'s');
+    d.style.setProperty('--delay',(1.5+Math.random()*6)+'s');
+    puffs.appendChild(d);
+  });
+
+  // drive the turbulence filters from JS (reliable repaint for HTML elements using SVG filters)
+  const boilT=document.getElementById('boilT'),boilD=document.getElementById('boilD');
+  const softT=document.getElementById('softT'),softD=document.getElementById('softD');
+  const t0=performance.now();
+  let last=0;
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(now-last<33) return; last=now;           // ~30 fps is enough for clouds
+    const t=(now-t0)/1000;
+    // formation: displacement collapses from chaotic mist to a gentle boil between 0.5s and 3.9s
+    const f=Math.min(1,Math.max(0,(t-0.5)/3.4));
+    const ease=1-Math.pow(1-f,3);
+    const scale=90-(90-11)*ease + Math.sin(t*1.7)*2.5 + Math.sin(t*0.6)*1.5;
+    boilD.setAttribute('scale',scale.toFixed(2));
+    const bfx=0.011+Math.sin(t*0.45)*0.0025, bfy=0.016+Math.cos(t*0.37)*0.003;
+    boilT.setAttribute('baseFrequency',bfx.toFixed(5)+' '+bfy.toFixed(5));
+    const sscale=60-25*ease + Math.sin(t*0.9)*6;
+    softD.setAttribute('scale',sscale.toFixed(2));
+    const sfx=0.006+Math.sin(t*0.3)*0.0015, sfy=0.009+Math.cos(t*0.25)*0.002;
+    softT.setAttribute('baseFrequency',sfx.toFixed(5)+' '+sfy.toFixed(5));
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
