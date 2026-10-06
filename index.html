@@ -72,15 +72,29 @@
   @keyframes floatCloud{ 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-10px) rotate(.3deg)} }
   .cloudWrap img{width:100%;height:auto;}
 
-  /* cloud text: WebGL canvas, formation + boil computed in a fragment shader */
+  /* cloud text: glyph pieces pop in one after another (transform/opacity only), arcs are drawn by a mask wipe */
   .cloudStack{position:relative;top:-44px;width:100%;aspect-ratio:1085/1449;}
-  .cloudGL{position:absolute;inset:0;width:100%;height:100%;display:block;}
-  .cloudFallback{position:absolute;inset:0;width:100%;height:auto;opacity:0;
-    -webkit-mask-image:linear-gradient(100deg,#000 0%,#000 30%,rgba(0,0,0,.6) 40%,transparent 55%);
-            mask-image:linear-gradient(100deg,#000 0%,#000 30%,rgba(0,0,0,.6) 40%,transparent 55%);
-    -webkit-mask-size:300% 100%;mask-size:300% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-    animation: fbReveal 2.6s cubic-bezier(.45,.05,.3,1) .5s forwards;}
-  @keyframes fbReveal{0%{-webkit-mask-position:100% 0;mask-position:100% 0;opacity:0}8%{opacity:1}100%{-webkit-mask-position:0% 0;mask-position:0% 0;opacity:1}}
+  .piece{position:absolute;overflow:hidden;opacity:0;transform-origin:50% 65%;will-change:transform,opacity;
+    animation: pop .62s cubic-bezier(.18,1.3,.4,1) var(--d) forwards;}
+  .piece img,.arc img{position:absolute;max-width:none;}
+  @keyframes pop{
+    0%  {opacity:0;transform:scale(.45) translateY(14px) rotate(-4deg)}
+    55% {opacity:1;transform:scale(1.08) translateY(-3px) rotate(1deg)}
+    100%{opacity:1;transform:scale(1) translateY(0) rotate(0)}
+  }
+  .whole{position:absolute;inset:0;width:100%;height:auto;opacity:0;}
+  .cloudStack.formed .piece,.cloudStack.formed .arc,.cloudStack.formed .burst{display:none}
+  .cloudStack.formed .whole{opacity:1}
+  .arc{position:absolute;overflow:hidden;opacity:0;
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;mask-size:100% 100%;}
+  /* little puffs bursting out when a piece appears */
+  .burst{position:absolute;width:var(--s);height:var(--s);border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(255,255,255,.95),rgba(255,255,255,.55) 40%,rgba(255,255,255,0) 70%);
+    opacity:0;animation: burst .9s ease-out var(--d) forwards;}
+  @keyframes burst{
+    0%  {opacity:.9;transform:translate(-50%,-50%) scale(.25)}
+    100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.4)}
+  }
 
   /* drifting puffs around the letters */
   .puff{
@@ -181,7 +195,6 @@
   </div>
 </div>
 
-<script src="assets/cloud-data.js"></script>
 <script>
 (function(){
   // fit stage to window
@@ -226,141 +239,88 @@
     puffs.appendChild(d);
   });
 
-  // ================= cloud formation on WebGL =================
-  const IW=1085,IH=1449,S=4,TMAX=4;            // image size, map downscale, seconds encoded in the map
-  // regions in cloud.png pixels; wipe direction; start/end seconds (order and directions follow the reference video)
-  const PARTS=[
-    {poly:[[100,100],[100,480],[215,455],[285,440],[320,408],[400,398],[480,372],[560,366],[643,340],[710,332],[790,262],[790,100]],
-      wipe:{type:"lin",angle:250}, t0:0.50, t1:1.45},
-    {poly:[[790,100],[1085,100],[1085,760],[500,760],[500,690],[700,660],[880,615],[960,560],[1010,480],[1000,380],[960,300],[900,262],[790,262]],
-      wipe:{type:"con",cx:560,cy:450,a0:44,a1:192}, t0:0.55, t1:2.55},
-    {poly:[[225,453],[285,440],[320,408],[400,398],[480,372],[560,366],[612,350],[612,672],[500,692],[400,692],[300,683],[225,665]],
-      wipe:{type:"lin",angle:0}, t0:1.30, t1:2.00},
-    {poly:[[612,350],[643,340],[710,332],[790,262],[900,262],[960,300],[1000,380],[1010,480],[960,560],[880,615],[700,660],[612,672]],
-      wipe:{type:"lin",angle:0}, t0:1.80, t1:2.45},
+  // ================= cloud formation: popping glyph pieces + arc wipes =================
+  const IW=1085,IH=1449;
+  // lower boundary of the "internet" band (keeps the 6/9 tops out of the letter pieces)
+  const B=[[100,480],[215,455],[285,440],[320,408],[400,398],[480,372],[560,366],[643,340],[710,332],[790,262],[1085,262]];
+  const Bat=x=>{for(let i=1;i<B.length;i++)if(x<=B[i][0]){const [x0,y0]=B[i-1],[x1,y1]=B[i];return y0+(y1-y0)*(x-x0)/(x1-x0);}return 262;};
+  // "internet": dividers between glyphs lean with the baseline (x shifts +0.333 per px of y, measured at y=440)
+  const div=[100,213,316,392,480,560,640,800];                       // i n t e r n et
+  const dx=(xb,y)=>xb+0.333*(y-440);
+  const pieces=[];
+  for(let k=0;k<div.length-1;k++){
+    const x1=div[k],x2=div[k+1],yb1=Bat(x1),yb2=Bat(x2);
+    const L=k===0?[[x1,90],[x1,yb1]]:[[dx(x1,90),90],[dx(x1,yb1),yb1]], R=k===div.length-2?[[x2,90],[x2,yb2]]:[[dx(x2,90),90],[dx(x2,yb2),yb2]];
+    pieces.push({poly:[L[0],R[0],R[1],L[1]],t:0.50+k*0.12});
+  }
+  const C=[[500,690],[700,660],[880,615],[960,560],[1010,480]];       // boundary between "lei" and the right arc
+  const Cat=x=>{for(let i=1;i<C.length;i++)if(x<=C[i][0]){const [x0,y0]=C[i-1],[x1,y1]=C[i];return y0+(y1-y0)*(x-x0)/(x1-x0);}return 480;};
+  pieces.push({poly:[[100,540],[225,540],[225,612],[100,612]],t:1.42});                                  // de la
+  pieces.push({poly:[[225,Bat(225)],[404,Bat(404)],[404,692],[225,666]],t:1.55});                         // 6
+  pieces.push({poly:[[404,Bat(404)],[612,Bat(612)],[612,672],[404,692]],t:1.70});                         // 9
+  [[612,706],[706,800],[800,915]].forEach((r,k)=>pieces.push({poly:[[r[0],Bat(r[0])],[r[1],Bat(r[1])],[r[1],Cat(r[1])],[r[0],Cat(r[0])]],t:1.9+k*0.13})); // l e i
+  const arcs=[
     {poly:[[0,480],[100,480],[215,455],[225,453],[225,665],[300,683],[400,692],[500,692],[500,760],[0,760]],
-      wipe:{type:"lin",angle:90}, t0:2.20, t1:2.95},
+      wipe:{type:"lin",angle:90}, t0:1.30, t1:1.95},                                                        // left swoosh, left -> right
+    {poly:[[790,100],[1085,100],[1085,760],[500,760],[500,690],[700,660],[880,615],[960,560],[1010,480],[1000,380],[960,300],[900,262],[790,262]],
+      wipe:{type:"con",cx:560,cy:450,a0:44,a1:192}, t0:2.15, t1:3.05},                                      // right swoosh, from the "t" around to under "lei"
   ];
-  PARTS.forEach(p=>{
-    if(p.wipe.type==="lin"){
-      const a=p.wipe.angle*Math.PI/180;p.d=[Math.sin(a),-Math.cos(a)];
-      const pr=p.poly.map(q=>q[0]*p.d[0]+q[1]*p.d[1]);p.pmin=Math.min(...pr);p.pmax=Math.max(...pr);
-    }
-  });
-  function inPoly(x,y,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
-    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
-  function boxBlur(src,w,h,r){ // separable box blur on float arrays
-    const tmp=new Float32Array(w*h),out=new Float32Array(w*h);
-    for(let y=0;y<h;y++){let acc=0;for(let x=-r;x<=r;x++)acc+=src[y*w+Math.min(w-1,Math.max(0,x))];
-      for(let x=0;x<w;x++){tmp[y*w+x]=acc/(2*r+1);acc+=src[y*w+Math.min(w-1,x+r+1)]-src[y*w+Math.max(0,x-r)];}}
-    for(let x=0;x<w;x++){let acc=0;for(let y=-r;y<=r;y++)acc+=tmp[Math.min(h-1,Math.max(0,y))*w+x];
-      for(let y=0;y<h;y++){out[y*w+x]=acc/(2*r+1);acc+=tmp[Math.min(h-1,y+r+1)*w+x]-tmp[Math.max(0,y-r)*w+x];}}
-    return out;
-  }
-  // per-pixel "appear at" seconds: wipe progress + stroke thickness (cores first, edges later) + noise, blurred across region seams
-  function buildMap(img){
-    const mw=Math.ceil(IW/S),mh=Math.ceil(IH/S);
-    const oc=document.createElement("canvas");oc.width=mw;oc.height=mh;const ctx=oc.getContext("2d");
-    ctx.drawImage(img,0,0,mw,mh);const px=ctx.getImageData(0,0,mw,mh).data;
-    const alpha=new Float32Array(mw*mh);for(let i=0;i<mw*mh;i++)alpha[i]=px[i*4+3]/255;
-    // chamfer distance (in low-res px) from each opaque pixel to the nearest transparent one: stroke cores are far, edges near
-    const INF=1e4,dist=new Float32Array(mw*mh);
-    for(let i=0;i<mw*mh;i++)dist[i]=alpha[i]>.5?INF:0;
-    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){const i=y*mw+x;let d=dist[i];
-      if(x>0)d=Math.min(d,dist[i-1]+1);if(y>0){d=Math.min(d,dist[i-mw]+1);if(x>0)d=Math.min(d,dist[i-mw-1]+1.414);if(x<mw-1)d=Math.min(d,dist[i-mw+1]+1.414);}dist[i]=d;}
-    for(let y=mh-1;y>=0;y--)for(let x=mw-1;x>=0;x--){const i=y*mw+x;let d=dist[i];
-      if(x<mw-1)d=Math.min(d,dist[i+1]+1);if(y<mh-1){d=Math.min(d,dist[i+mw]+1);if(x<mw-1)d=Math.min(d,dist[i+mw+1]+1.414);if(x>0)d=Math.min(d,dist[i+mw-1]+1.414);}dist[i]=d;}
-    const gw=Math.ceil(mw/14)+1,gh=Math.ceil(mh/14)+1,grid=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)grid[i]=Math.random();
-    const noise=(x,y)=>{const gx=x/14,gy=y/14,x0=Math.floor(gx),y0=Math.floor(gy),fx=gx-x0,fy=gy-y0,g=(a,b)=>grid[Math.min(gh-1,b)*gw+Math.min(gw-1,a)];
-      return (g(x0,y0)*(1-fx)+g(x0+1,y0)*fx)*(1-fy)+(g(x0,y0+1)*(1-fx)+g(x0+1,y0+1)*fx)*fy;};
-    const T=new Float32Array(mw*mh);
-    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
-      const X=(x+.5)*S,Y=(y+.5)*S;let t=3.4;
-      for(const p of PARTS){ if(!inPoly(X,Y,p.poly))continue;
-        let u;
-        if(p.wipe.type==="lin"){u=(X*p.d[0]+Y*p.d[1]-p.pmin)/(p.pmax-p.pmin);}
-        else{let ang=Math.atan2(X-p.wipe.cx,-(Y-p.wipe.cy))*180/Math.PI;if(ang<0)ang+=360;u=Math.min(1,Math.max(0,(ang-p.wipe.a0)/(p.wipe.a1-p.wipe.a0)));}
-        const edge=1-Math.min(1,dist[y*mw+x]/9);               // 0 deep inside strokes, 1 at the outline (9 low-res px = 36px)
-        const raw=u+edge*.6+(noise(x,y)-.5)*.22;
-        t=p.t0+(p.t1-p.t0)*raw; break;
-      }
-      T[y*mw+x]=t;
-    }
-    const Tb=boxBlur(T,mw,mh,1);                             // soften seams between regions
-    const out=new Uint8Array(mw*mh);for(let i=0;i<mw*mh;i++)out[i]=Math.max(0,Math.min(255,Math.round(Tb[i]/TMAX*255)));
-    return {data:out,w:mw,h:mh};
-  }
   const stackEl=document.getElementById("cloudStack");
-  const canvas=document.createElement("canvas");canvas.width=IW;canvas.height=IH;canvas.className="cloudGL";
-  stackEl.insertBefore(canvas,stackEl.firstChild);
-  const gl=canvas.getContext("webgl",{premultipliedAlpha:true,alpha:true,antialias:false,depth:false,stencil:false});
-  let drawCloud=null;
-  const cloudImg=new Image();cloudImg.src=window.CLOUD_DATA||"assets/cloud.png"; // data URI keeps WebGL happy even when opened from disk
-  const freezeAt=new URLSearchParams(location.search).get("t"); // debug: ?t=1.2 freezes the cloud timeline
-  const useFallback=why=>{console.warn("cloud: fallback,",why);const im=document.createElement("img");im.src=cloudImg.src;im.className="cloudFallback";stackEl.insertBefore(im,stackEl.firstChild);canvas.remove();};
-  cloudImg.onerror=()=>useFallback("image failed to load");
-  cloudImg.onload=()=>{try{
-    if(!gl||new URLSearchParams(location.search).has("nogl")) throw new Error("no WebGL");
-    const vs="attribute vec2 p;varying vec2 v;void main(){gl_Position=vec4(p,0.,1.);v=vec2((p.x+1.)*.5,(1.-p.y)*.5);}";
-    const fsrc=`#ifdef GL_FRAGMENT_PRECISION_HIGH
-      precision highp float;
-      #else
-      precision mediump float;
-      #endif
-      varying vec2 v;uniform sampler2D uCloud;uniform sampler2D uMap;uniform sampler2D uNoise;uniform float uT;uniform float uTMax;uniform float uBoil;
-      void main(){
-        vec2 uv=v;
-        vec2 n=texture2D(uNoise,uv*vec2(5.,6.7)+vec2(uT*.02,uT*.013)).rg;   /* smooth noise from a tiny repeating texture */
-        uv+=(n-.5)*uBoil;                                                  /* gentle permanent boil */
-        vec4 c=texture2D(uCloud,uv);
-        float T=texture2D(uMap,uv).r*uTMax;
-        float a=smoothstep(T,T+.07,uT);                   /* each pixel pops in at its own time, edge stays crisp */
-        gl_FragColor=c*a;
-      }`;
-    const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
-    const prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,vs));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,fsrc));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error("link: "+gl.getProgramInfoLog(prog));gl.useProgram(prog);
-    const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-    const loc=gl.getAttribLocation(prog,"p");gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-    const tex=(unit,w,h,data,wrap)=>{const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);wrap=wrap||gl.CLAMP_TO_EDGE;
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,wrap);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,wrap);
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-      if(w===null){gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,data);}
-      else{gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);gl.pixelStorei(gl.UNPACK_ALIGNMENT,4);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,data);}
-      return t;};
-    tex(0,null,null,cloudImg);
-    const map=buildMap(cloudImg);const mapRGBA=new Uint8Array(map.w*map.h*4);for(let i=0;i<map.w*map.h;i++){mapRGBA[i*4]=map.data[i];mapRGBA[i*4+3]=255;}
-    tex(1,map.w,map.h,mapRGBA);
-    const NS=64,noiseTex=new Uint8Array(NS*NS*4);{ // two channels of smooth value noise, tileable
-      const g=8,grid=[];for(let c=0;c<2;c++){grid[c]=new Float32Array(g*g);for(let i=0;i<g*g;i++)grid[c][i]=Math.random();}
-      for(let y=0;y<NS;y++)for(let x=0;x<NS;x++)for(let c=0;c<2;c++){const gx=x/NS*g,gy=y/NS*g,x0=Math.floor(gx),y0=Math.floor(gy);let fx=gx-x0,fy=gy-y0;fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);
-        const G=(a,b)=>grid[c][(b%g)*g+(a%g)];const val=(G(x0,y0)*(1-fx)+G(x0+1,y0)*fx)*(1-fy)+(G(x0,y0+1)*(1-fx)+G(x0+1,y0+1)*fx)*fy;noiseTex[(y*NS+x)*4+c]=Math.round(val*255);}
-      for(let i=0;i<NS*NS;i++)noiseTex[i*4+3]=255;}
-    tex(2,NS,NS,noiseTex,gl.REPEAT);
-    gl.uniform1i(gl.getUniformLocation(prog,"uCloud"),0);gl.uniform1i(gl.getUniformLocation(prog,"uMap"),1);gl.uniform1i(gl.getUniformLocation(prog,"uNoise"),2);
-    gl.uniform1f(gl.getUniformLocation(prog,"uTMax"),TMAX);
-    const uT=gl.getUniformLocation(prog,"uT"),uBoil=gl.getUniformLocation(prog,"uBoil");
-    gl.viewport(0,0,IW,IH);gl.clearColor(0,0,0,0);
-    drawCloud=t=>{gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform1f(uT,t);
-      const settle=Math.min(1,Math.max(0,(t-.5)/2.6));
-      gl.uniform1f(uBoil,.008+.012*(1-settle));gl.drawArrays(gl.TRIANGLE_STRIP,0,4);};
-    // self-test: render fully formed, then read a sky pixel (must be transparent) and a letter pixel (must be bright)
-    drawCloud(10);
-    const px=new Uint8Array(4),sky=[20,IH-20],letter=[300,IH-560];
-    gl.readPixels(sky[0],sky[1],1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);const skyA=px[3];
-    gl.readPixels(letter[0],letter[1],1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);const letA=px[3],letR=px[0];
-    const err=gl.getError();
-    if(err!==gl.NO_ERROR||skyA>8||letA<128||letR<96){drawCloud=null;throw new Error("self-test failed: glErr="+err+" sky="+skyA+" letter="+letA+"/"+letR);}
-    console.info("cloud: webgl ok");
-  }catch(e){drawCloud=null;useFallback(e&&e.message||e);}};
-  // start the whole timeline (CSS + cloud) only once all images are decoded
+  function makeCrop(p,cls){
+    const xs=p.poly.map(q=>q[0]),ys=p.poly.map(q=>q[1]);
+    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),w=x1-x0,h=y1-y0;
+    const el=document.createElement("div");el.className=cls;
+    el.style.left=(x0/IW*100)+"%";el.style.top=(y0/IH*100)+"%";el.style.width=(w/IW*100)+"%";el.style.height=(h/IH*100)+"%";
+    el.style.clipPath=el.style.webkitClipPath="polygon("+p.poly.map(q=>((q[0]-x0)/w*100).toFixed(2)+"% "+((q[1]-y0)/h*100).toFixed(2)+"%").join(",")+")";
+    const img=document.createElement("img");img.src="assets/cloud.png";img.alt="";
+    img.style.width=(IW/w*100)+"%";img.style.left=(-x0/w*100)+"%";img.style.top=(-y0/h*100)+"%";
+    el.appendChild(img);stackEl.insertBefore(el,stackEl.firstChild);
+    p.el=el;p.box={x0,y0,w,h};return el;
+  }
+  pieces.forEach(p=>{
+    makeCrop(p,"piece").style.setProperty("--d",p.t+"s");
+    const cx=(p.box.x0+p.box.w/2)/IW*100,cy=(p.box.y0+p.box.h/2)/IH*100;     // puff bursts around the piece
+    for(let i=0;i<3;i++){const b=document.createElement("i");b.className="burst";
+      const sz=Math.round(p.box.w*(.35+Math.random()*.4));
+      b.style.left=(cx+(Math.random()-.5)*p.box.w/IW*70)+"%";b.style.top=(cy+(Math.random()-.5)*p.box.h/IH*60)+"%";
+      b.style.setProperty("--s",sz+"px");b.style.setProperty("--d",(p.t+Math.random()*.08)+"s");
+      b.style.setProperty("--dx",((Math.random()-.5)*90)+"px");b.style.setProperty("--dy",(-20-Math.random()*60)+"px");
+      stackEl.appendChild(b);}
+  });
+  arcs.forEach(a=>makeCrop(a,"arc"));
+  const whole=document.createElement("img");whole.src="assets/cloud.png";whole.alt="internet de la 69 lei";whole.className="whole";stackEl.insertBefore(whole,stackEl.firstChild);
+  const FORMED_AT=3.1;
+  const smooth=x=>x<=0?0:x>=1?1:x*x*(3-2*x);
+  const setMask=(el,m)=>{el.style.webkitMaskImage=m;el.style.maskImage=m;};
+  function updateArcs(t){
+    arcs.forEach(a=>{
+      if(a.done)return;
+      const u=(t-a.t0)/(a.t1-a.t0);
+      if(u<0)return;
+      a.el.style.opacity=1;
+      if(u>=1){a.done=true;setMask(a.el,"none");return;}
+      const q=smooth(u),F=a.wipe.type==="lin"?40:55;
+      if(a.wipe.type==="lin"){const pos=(100+F)*q;
+        setMask(a.el,"linear-gradient("+a.wipe.angle+"deg,#000 "+(pos-F).toFixed(1)+"%,rgba(0,0,0,0) "+pos.toFixed(1)+"%)");}
+      else{const b=a.box,cx=((a.wipe.cx-b.x0)/b.w*100).toFixed(1),cy=((a.wipe.cy-b.y0)/b.h*100).toFixed(1),pos=(a.wipe.a1-a.wipe.a0+F)*q;
+        setMask(a.el,"conic-gradient(from "+a.wipe.a0+"deg at "+cx+"% "+cy+"%,#000 0deg,#000 "+Math.max(0,pos-F).toFixed(1)+"deg,rgba(0,0,0,0) "+pos.toFixed(1)+"deg,rgba(0,0,0,0) 360deg)");}
+    });
+  }
+  // start the whole timeline (CSS + arcs) only once the images are decoded
+  const freezeAt=new URLSearchParams(location.search).get("t"); // debug: ?t=1.6 freezes the cloud timeline
   let t0=null;
-  const allImgs=[...document.querySelectorAll(".stage img")].concat(cloudImg);
-  Promise.all(allImgs.map(i=>i.decode().catch(()=>{}))).then(()=>{stage.classList.remove("loading");t0=performance.now();});
+  const probe=new Image();probe.src="assets/cloud.png";
+  const allImgs=[...document.querySelectorAll(".stage img")].concat(probe);
+  Promise.all(allImgs.map(i=>i.decode().catch(()=>{}))).then(()=>{
+    stage.classList.remove("loading");t0=performance.now();
+    if(freezeAt!==null)document.getAnimations().forEach(an=>{an.pause();an.currentTime=+freezeAt*1000;});
+  });
   function frame(now){
     requestAnimationFrame(frame);
-    if(!drawCloud||t0===null)return;
+    if(t0===null)return;
     const t=freezeAt!==null?+freezeAt:(now-t0)/1000;
-    drawCloud(t);
+    updateArcs(t);
+    if(t>=FORMED_AT&&!stackEl.classList.contains("formed"))stackEl.classList.add("formed");
   }
   requestAnimationFrame(frame);
 })();
