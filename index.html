@@ -72,19 +72,11 @@
   @keyframes floatCloud{ 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-10px) rotate(.3deg)} }
   .cloudWrap img{width:100%;height:auto;}
 
-  /* cloud text, cut into 5 parts that form in sequence (as in the reference video) */
-  .cloudStack{
-    position:relative;top:-44px;width:100%;aspect-ratio:1085/1449;
-    filter:url(#boil);
-  }
-  .part{
-    position:absolute;overflow:hidden;
-    filter:url(#grow);                 /* thin cores first, then letters inflate to full thickness */
-    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-    -webkit-mask-size:100% 100%;mask-size:100% 100%;
-    opacity:0;                         /* JS reveals */
-  }
-  .part img{position:absolute;max-width:none;}
+  /* cloud text: WebGL canvas, formation + boil computed in a fragment shader */
+  .cloudStack{position:relative;top:-44px;width:100%;aspect-ratio:1085/1449;}
+  .cloudGL{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .cloudFallback{position:absolute;inset:0;width:100%;height:auto;opacity:0;animation:fadeIn 1.6s ease-out .5s forwards;}
+  @keyframes fadeIn{to{opacity:1}}
 
   /* drifting puffs around the letters */
   .puff{
@@ -128,6 +120,8 @@
   }
   @keyframes shine{ 0%{opacity:0;background-position:120% 0} 10%{opacity:1} 30%{opacity:0;background-position:-30% 0} 100%{opacity:0;background-position:-30% 0} }
 
+  .stage.loading *{animation-play-state:paused!important}   /* everything waits for the images */
+
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01s!important;animation-delay:0s!important}
   }
@@ -136,23 +130,12 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <!-- boiling displacement for the crisp letters -->
-    <filter id="boil" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
-      <feTurbulence id="boilT" type="fractalNoise" baseFrequency="0.011 0.016" numOctaves="3" seed="7" result="n"/>
-      <feDisplacementMap id="boilD" in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-    <!-- erode/inflate: boosts alpha, blurs it, thresholds it, keeps source texture -->
-    <filter id="grow" x="-6%" y="-6%" width="112%" height="112%" color-interpolation-filters="sRGB">
-      <feComponentTransfer in="SourceGraphic" result="solid"><feFuncA type="linear" slope="2.4" intercept="0"/></feComponentTransfer>
-      <feGaussianBlur in="solid" stdDeviation="5" result="soft"/>
-      <feComponentTransfer in="soft" result="thr"><feFuncA type="linear" slope="7" intercept="-2.9"/></feComponentTransfer>
-      <feComposite in="solid" in2="thr" operator="in"/>
-    </filter>
+    <filter id="neon" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
   </defs>
 </svg>
 
 <div class="viewport">
-  <div class="stage" id="stage">
+  <div class="stage loading" id="stage">
     <div class="layer bg"><img src="assets/bg.png" alt=""></div>
 
     <div class="layer">
@@ -238,69 +221,116 @@
     puffs.appendChild(d);
   });
 
-  // ---- cloud parts: polygons in cloud.png pixel space (1085x1449) ----
-  const IW=1085,IH=1449;
+  // ================= cloud formation on WebGL =================
+  const IW=1085,IH=1449,S=4,TMAX=4;            // image size, map downscale, seconds encoded in the map
+  // regions in cloud.png pixels; wipe direction; start/end seconds (order and directions follow the reference video)
   const PARTS=[
-    // name, polygon, wipe:{type,angle|center+angles}, t0, t1 (seconds)  -- order mirrors the reference video
-    {n:"internet", poly:[[100,100],[100,480],[215,455],[285,440],[320,408],[400,398],[480,372],[560,366],[643,340],[710,332],[790,262],[790,100]],
-      wipe:{type:"lin",angle:250,F:42}, t0:0.50, t1:1.45},
-    {n:"arcR", poly:[[790,100],[1085,100],[1085,760],[500,760],[500,690],[700,660],[880,615],[960,560],[1010,480],[1000,380],[960,300],[900,262],[790,262]],
-      wipe:{type:"con",cx:560,cy:450,a0:44,a1:192,F:55}, t0:0.55, t1:2.55},
-    {n:"n69", poly:[[225,453],[285,440],[320,408],[400,398],[480,372],[560,366],[612,350],[612,672],[500,692],[400,692],[300,683],[225,665]],
-      wipe:{type:"lin",angle:0,F:45}, t0:1.30, t1:2.00},
-    {n:"lei", poly:[[612,350],[643,340],[710,332],[790,262],[900,262],[960,300],[1000,380],[1010,480],[960,560],[880,615],[700,660],[612,672]],
-      wipe:{type:"lin",angle:0,F:45}, t0:1.80, t1:2.45},
-    {n:"arcL", poly:[[0,480],[100,480],[215,455],[225,453],[225,665],[300,683],[400,692],[500,692],[500,760],[0,760]],
-      wipe:{type:"lin",angle:90,F:40}, t0:2.20, t1:2.95},
+    {poly:[[100,100],[100,480],[215,455],[285,440],[320,408],[400,398],[480,372],[560,366],[643,340],[710,332],[790,262],[790,100]],
+      wipe:{type:"lin",angle:250}, t0:0.50, t1:1.45},
+    {poly:[[790,100],[1085,100],[1085,760],[500,760],[500,690],[700,660],[880,615],[960,560],[1010,480],[1000,380],[960,300],[900,262],[790,262]],
+      wipe:{type:"con",cx:560,cy:450,a0:44,a1:192}, t0:0.55, t1:2.55},
+    {poly:[[225,453],[285,440],[320,408],[400,398],[480,372],[560,366],[612,350],[612,672],[500,692],[400,692],[300,683],[225,665]],
+      wipe:{type:"lin",angle:0}, t0:1.30, t1:2.00},
+    {poly:[[612,350],[643,340],[710,332],[790,262],[900,262],[960,300],[1000,380],[1010,480],[960,560],[880,615],[700,660],[612,672]],
+      wipe:{type:"lin",angle:0}, t0:1.80, t1:2.45},
+    {poly:[[0,480],[100,480],[215,455],[225,453],[225,665],[300,683],[400,692],[500,692],[500,760],[0,760]],
+      wipe:{type:"lin",angle:90}, t0:2.20, t1:2.95},
   ];
-  const stack=document.getElementById("cloudStack");
   PARTS.forEach(p=>{
-    const xs=p.poly.map(q=>q[0]),ys=p.poly.map(q=>q[1]);
-    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),w=x1-x0,h=y1-y0;
-    const el=document.createElement("div");el.className="part";el.dataset.n=p.n;
-    el.style.left=(x0/IW*100)+"%";el.style.top=(y0/IH*100)+"%";el.style.width=(w/IW*100)+"%";el.style.height=(h/IH*100)+"%";
-    el.style.clipPath="polygon("+p.poly.map(q=>((q[0]-x0)/w*100).toFixed(2)+"% "+((q[1]-y0)/h*100).toFixed(2)+"%").join(",")+")";
-    const img=document.createElement("img");img.src="assets/cloud.png";img.alt="";
-    img.style.width=(IW/w*100)+"%";img.style.left=(-x0/w*100)+"%";img.style.top=(-y0/h*100)+"%";
-    el.appendChild(img);stack.insertBefore(el,stack.firstChild);
-    p.el=el;p.box={x0,y0,w,h};p.done=false;
+    if(p.wipe.type==="lin"){
+      const a=p.wipe.angle*Math.PI/180;p.d=[Math.sin(a),-Math.cos(a)];
+      const pr=p.poly.map(q=>q[0]*p.d[0]+q[1]*p.d[1]);p.pmin=Math.min(...pr);p.pmax=Math.max(...pr);
+    }
   });
-  const smooth=x=>x<=0?0:x>=1?1:x*x*(3-2*x);
-  function setMask(el,m){el.style.webkitMaskImage=m;el.style.maskImage=m;}
-  function updateParts(t){
-    PARTS.forEach(p=>{
-      if(p.done) return;
-      const u=(t-p.t0)/(p.t1-p.t0);
-      if(u<0){return;}
-      if(u>=1){if(freezeAt===null)p.done=true;setMask(p.el,"none");p.el.style.opacity=1;p.el.style.filter="none";return;}
-      const q=smooth(u),F=p.wipe.F;
-      p.el.style.opacity=1;
-      if(p.wipe.type==="lin"){
-        const pos=(100+F)*q;                       // leading edge travels 0 -> 100+F
-        setMask(p.el,"linear-gradient("+p.wipe.angle+"deg,#000 "+(pos-F).toFixed(1)+"%,rgba(0,0,0,0) "+pos.toFixed(1)+"%)");
-      }else{
-        const b=p.box,cx=((p.wipe.cx-b.x0)/b.w*100).toFixed(1),cy=((p.wipe.cy-b.y0)/b.h*100).toFixed(1);
-        const span=p.wipe.a1-p.wipe.a0,F2=F,pos=(span+F2)*q;
-        setMask(p.el,"conic-gradient(from "+p.wipe.a0+"deg at "+cx+"% "+cy+"%,#000 0deg,#000 "+Math.max(0,pos-F2).toFixed(1)+"deg,rgba(0,0,0,0) "+pos.toFixed(1)+"deg,rgba(0,0,0,0) 360deg)");
-      }
-    });
+  function inPoly(x,y,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
+  function boxBlur(src,w,h,r){ // separable box blur on float arrays
+    const tmp=new Float32Array(w*h),out=new Float32Array(w*h);
+    for(let y=0;y<h;y++){let acc=0;for(let x=-r;x<=r;x++)acc+=src[y*w+Math.min(w-1,Math.max(0,x))];
+      for(let x=0;x<w;x++){tmp[y*w+x]=acc/(2*r+1);acc+=src[y*w+Math.min(w-1,x+r+1)]-src[y*w+Math.max(0,x-r)];}}
+    for(let x=0;x<w;x++){let acc=0;for(let y=-r;y<=r;y++)acc+=tmp[Math.min(h-1,Math.max(0,y))*w+x];
+      for(let y=0;y<h;y++){out[y*w+x]=acc/(2*r+1);acc+=tmp[Math.min(h-1,y+r+1)*w+x]-tmp[Math.max(0,y-r)*w+x];}}
+    return out;
   }
-
-  // drive the turbulence filter from JS (reliable repaint for HTML elements using SVG filters)
-  const boilT=document.getElementById('boilT'),boilD=document.getElementById('boilD');
-  const t0=performance.now();
-  const freezeAt=new URLSearchParams(location.search).get('t'); // debug: ?t=1.2 freezes the cloud timeline
-  let last=0;
+  // per-pixel "appear at" seconds: wipe progress + stroke thickness (cores first, edges later) + noise, blurred across region seams
+  function buildMap(img){
+    const mw=Math.ceil(IW/S),mh=Math.ceil(IH/S);
+    const oc=document.createElement("canvas");oc.width=mw;oc.height=mh;const ctx=oc.getContext("2d");
+    ctx.drawImage(img,0,0,mw,mh);const px=ctx.getImageData(0,0,mw,mh).data;
+    const alpha=new Float32Array(mw*mh);for(let i=0;i<mw*mh;i++)alpha[i]=px[i*4+3]/255;
+    const thick=boxBlur(alpha,mw,mh,3);                    // ~1 inside fat strokes, lower on thin strokes and edges
+    const gw=Math.ceil(mw/9)+1,gh=Math.ceil(mh/9)+1,grid=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)grid[i]=Math.random();
+    const noise=(x,y)=>{const gx=x/9,gy=y/9,x0=Math.floor(gx),y0=Math.floor(gy),fx=gx-x0,fy=gy-y0,g=(a,b)=>grid[Math.min(gh-1,b)*gw+Math.min(gw-1,a)];
+      return (g(x0,y0)*(1-fx)+g(x0+1,y0)*fx)*(1-fy)+(g(x0,y0+1)*(1-fx)+g(x0+1,y0+1)*fx)*fy;};
+    const T=new Float32Array(mw*mh);
+    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
+      const X=(x+.5)*S,Y=(y+.5)*S;let t=3.4;
+      for(const p of PARTS){ if(!inPoly(X,Y,p.poly))continue;
+        let u;
+        if(p.wipe.type==="lin"){u=(X*p.d[0]+Y*p.d[1]-p.pmin)/(p.pmax-p.pmin);}
+        else{let ang=Math.atan2(X-p.wipe.cx,-(Y-p.wipe.cy))*180/Math.PI;if(ang<0)ang+=360;u=Math.min(1,Math.max(0,(ang-p.wipe.a0)/(p.wipe.a1-p.wipe.a0)));}
+        const edge=1-Math.min(1,thick[y*mw+x]*1.6);          // 0 at stroke cores, up to 1 at thin edges
+        const raw=u+edge*.45+(noise(x,y)-.5)*.35;
+        t=p.t0+(p.t1-p.t0)*raw; break;
+      }
+      T[y*mw+x]=t;
+    }
+    const Tb=boxBlur(T,mw,mh,1);                             // soften seams between regions
+    const out=new Uint8Array(mw*mh);for(let i=0;i<mw*mh;i++)out[i]=Math.max(0,Math.min(255,Math.round(Tb[i]/TMAX*255)));
+    return {data:out,w:mw,h:mh};
+  }
+  const stackEl=document.getElementById("cloudStack");
+  const canvas=document.createElement("canvas");canvas.width=IW;canvas.height=IH;canvas.className="cloudGL";
+  stackEl.insertBefore(canvas,stackEl.firstChild);
+  const gl=canvas.getContext("webgl",{premultipliedAlpha:true,alpha:true,antialias:false,depth:false,stencil:false});
+  let drawCloud=null;
+  const cloudImg=new Image();cloudImg.src="assets/cloud.png";
+  const freezeAt=new URLSearchParams(location.search).get("t"); // debug: ?t=1.2 freezes the cloud timeline
+  cloudImg.onload=()=>{
+    if(!gl){const im=document.createElement("img");im.src=cloudImg.src;im.className="cloudFallback";stackEl.insertBefore(im,stackEl.firstChild);canvas.remove();return;}
+    const vs="attribute vec2 p;varying vec2 v;void main(){gl_Position=vec4(p,0.,1.);v=vec2((p.x+1.)*.5,(1.-p.y)*.5);}";
+    const fsrc=`precision mediump float;varying vec2 v;uniform sampler2D uCloud,uMap;uniform float uT,uTMax,uBoil;
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+      void main(){
+        vec2 uv=v;
+        float n1=vn(uv*vec2(5.,6.7)+vec2(uT*.13,uT*.07));
+        float n2=vn(uv*vec2(5.,6.7)+vec2(3.1,uT*.11)+2.);
+        uv+=(vec2(n1,n2)-.5)*uBoil;                       /* gentle permanent boil */
+        vec4 c=texture2D(uCloud,uv);
+        float T=texture2D(uMap,uv).r*uTMax;
+        float a=smoothstep(T,T+.32,uT);                   /* each pixel condenses at its own time */
+        gl_FragColor=c*a;
+      }`;
+    const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
+    const prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,vs));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,fsrc));gl.linkProgram(prog);gl.useProgram(prog);
+    const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+    const loc=gl.getAttribLocation(prog,"p");gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    const tex=(unit,w,h,data,fmt)=>{const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      if(w===null){gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,data);}
+      else{gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,fmt,w,h,0,fmt,gl.UNSIGNED_BYTE,data);}
+      return t;};
+    tex(0,null,null,cloudImg);
+    const map=buildMap(cloudImg);tex(1,map.w,map.h,map.data,gl.LUMINANCE);
+    gl.uniform1i(gl.getUniformLocation(prog,"uCloud"),0);gl.uniform1i(gl.getUniformLocation(prog,"uMap"),1);
+    gl.uniform1f(gl.getUniformLocation(prog,"uTMax"),TMAX);
+    const uT=gl.getUniformLocation(prog,"uT"),uBoil=gl.getUniformLocation(prog,"uBoil");
+    gl.viewport(0,0,IW,IH);gl.clearColor(0,0,0,0);
+    drawCloud=t=>{gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform1f(uT,t);
+      const settle=Math.min(1,Math.max(0,(t-.5)/2.6));
+      gl.uniform1f(uBoil,.008+.012*(1-settle));gl.drawArrays(gl.TRIANGLE_STRIP,0,4);};
+  };
+  // start the whole timeline (CSS + cloud) only once all images are decoded
+  let t0=null;
+  const allImgs=[...document.querySelectorAll(".stage img")].concat(cloudImg);
+  Promise.all(allImgs.map(i=>i.decode().catch(()=>{}))).then(()=>{stage.classList.remove("loading");t0=performance.now();});
   function frame(now){
     requestAnimationFrame(frame);
-    if(now-last<33) return; last=now;           // ~30 fps is enough for clouds
+    if(!drawCloud||t0===null)return;
     const t=freezeAt!==null?+freezeAt:(now-t0)/1000;
-    updateParts(t);
-    // gentle permanent boil of the formed letters
-    const scale=9 + Math.sin(t*1.7)*2.5 + Math.sin(t*0.6)*1.5;
-    boilD.setAttribute('scale',scale.toFixed(2));
-    const bfx=0.011+Math.sin(t*0.45)*0.0025, bfy=0.016+Math.cos(t*0.37)*0.003;
-    boilT.setAttribute('baseFrequency',bfx.toFixed(5)+' '+bfy.toFixed(5));
+    drawCloud(t);
   }
   requestAnimationFrame(frame);
 })();
