@@ -263,9 +263,15 @@
     const oc=document.createElement("canvas");oc.width=mw;oc.height=mh;const ctx=oc.getContext("2d");
     ctx.drawImage(img,0,0,mw,mh);const px=ctx.getImageData(0,0,mw,mh).data;
     const alpha=new Float32Array(mw*mh);for(let i=0;i<mw*mh;i++)alpha[i]=px[i*4+3]/255;
-    const thick=boxBlur(alpha,mw,mh,3);                    // ~1 inside fat strokes, lower on thin strokes and edges
-    const gw=Math.ceil(mw/9)+1,gh=Math.ceil(mh/9)+1,grid=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)grid[i]=Math.random();
-    const noise=(x,y)=>{const gx=x/9,gy=y/9,x0=Math.floor(gx),y0=Math.floor(gy),fx=gx-x0,fy=gy-y0,g=(a,b)=>grid[Math.min(gh-1,b)*gw+Math.min(gw-1,a)];
+    // chamfer distance (in low-res px) from each opaque pixel to the nearest transparent one: stroke cores are far, edges near
+    const INF=1e4,dist=new Float32Array(mw*mh);
+    for(let i=0;i<mw*mh;i++)dist[i]=alpha[i]>.5?INF:0;
+    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){const i=y*mw+x;let d=dist[i];
+      if(x>0)d=Math.min(d,dist[i-1]+1);if(y>0){d=Math.min(d,dist[i-mw]+1);if(x>0)d=Math.min(d,dist[i-mw-1]+1.414);if(x<mw-1)d=Math.min(d,dist[i-mw+1]+1.414);}dist[i]=d;}
+    for(let y=mh-1;y>=0;y--)for(let x=mw-1;x>=0;x--){const i=y*mw+x;let d=dist[i];
+      if(x<mw-1)d=Math.min(d,dist[i+1]+1);if(y<mh-1){d=Math.min(d,dist[i+mw]+1);if(x<mw-1)d=Math.min(d,dist[i+mw+1]+1.414);if(x>0)d=Math.min(d,dist[i+mw-1]+1.414);}dist[i]=d;}
+    const gw=Math.ceil(mw/14)+1,gh=Math.ceil(mh/14)+1,grid=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)grid[i]=Math.random();
+    const noise=(x,y)=>{const gx=x/14,gy=y/14,x0=Math.floor(gx),y0=Math.floor(gy),fx=gx-x0,fy=gy-y0,g=(a,b)=>grid[Math.min(gh-1,b)*gw+Math.min(gw-1,a)];
       return (g(x0,y0)*(1-fx)+g(x0+1,y0)*fx)*(1-fy)+(g(x0,y0+1)*(1-fx)+g(x0+1,y0+1)*fx)*fy;};
     const T=new Float32Array(mw*mh);
     for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
@@ -274,8 +280,8 @@
         let u;
         if(p.wipe.type==="lin"){u=(X*p.d[0]+Y*p.d[1]-p.pmin)/(p.pmax-p.pmin);}
         else{let ang=Math.atan2(X-p.wipe.cx,-(Y-p.wipe.cy))*180/Math.PI;if(ang<0)ang+=360;u=Math.min(1,Math.max(0,(ang-p.wipe.a0)/(p.wipe.a1-p.wipe.a0)));}
-        const edge=1-Math.min(1,thick[y*mw+x]*1.6);          // 0 at stroke cores, up to 1 at thin edges
-        const raw=u+edge*.45+(noise(x,y)-.5)*.35;
+        const edge=1-Math.min(1,dist[y*mw+x]/9);               // 0 deep inside strokes, 1 at the outline (9 low-res px = 36px)
+        const raw=u+edge*.6+(noise(x,y)-.5)*.22;
         t=p.t0+(p.t1-p.t0)*raw; break;
       }
       T[y*mw+x]=t;
@@ -306,7 +312,7 @@
         uv+=(vec2(n1,n2)-.5)*uBoil;                       /* gentle permanent boil */
         vec4 c=texture2D(uCloud,uv);
         float T=texture2D(uMap,uv).r*uTMax;
-        float a=smoothstep(T,T+.32,uT);                   /* each pixel condenses at its own time */
+        float a=smoothstep(T,T+.07,uT);                   /* each pixel pops in at its own time, edge stays crisp */
         gl_FragColor=c*a;
       }`;
     const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
