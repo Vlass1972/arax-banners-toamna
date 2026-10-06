@@ -2,3 +2,8 @@ Image *.png
 photo_*.jpg
 assets/reference.jpg
 .claude
+*.MOV
+*.mov
+*.mp4
+*.docx
+_tmp_*

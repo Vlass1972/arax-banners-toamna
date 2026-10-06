@@ -3,3 +3,8 @@ photo_*.jpg
 .claude/
 .vercel/
 node_modules/
+*.MOV
+*.mov
+*.mp4
+*.docx
+_tmp_*
