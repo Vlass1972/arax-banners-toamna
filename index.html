@@ -72,17 +72,45 @@
   @keyframes floatCloud{ 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-10px) rotate(.3deg)} }
   .cloudWrap img{width:100%;height:auto;}
 
-  /* cloud text: a blurred mist copy condenses, then the sharp text emerges from it.
-     Only opacity and transform are animated; the blur is static, so it is rasterised once. */
+  /* cloud text: fog rolls in, then the letters come into focus in a soft wave, left to right.
+     Three stacked copies of the same image: heavy blur, light blur, sharp.
+     Blur is static (rasterised once). Animated: opacity, transform, and the mask position of plain wrappers. */
   .cloudStack{position:relative;top:-44px;width:100%;aspect-ratio:1085/1449;}
-  .cloudStack img{position:absolute;left:0;top:0;width:100%;height:auto;will-change:transform,opacity;}
-  .mist{filter:blur(18px);opacity:0;transform:scale(1.12);transform-origin:50% 32%;
-    animation: mistIn 1.8s cubic-bezier(.2,.7,.3,1) .3s forwards, mistOut 1.2s ease-in-out 2.1s forwards;}
-  @keyframes mistIn {to{opacity:.95;transform:scale(1)}}
-  @keyframes mistOut{from{opacity:.95;transform:scale(1)}to{opacity:0;transform:scale(1.03)}}
-  .sharp{opacity:0;transform:scale(1.05);transform-origin:50% 32%;
-    animation: sharpIn 1.6s cubic-bezier(.25,.6,.3,1) 1.0s forwards;}
-  @keyframes sharpIn{0%{opacity:0;transform:scale(1.05)}60%{opacity:1}100%{opacity:1;transform:scale(1)}}
+  .cl{position:absolute;inset:0;}
+  .cl img{position:absolute;left:0;top:0;width:100%;height:auto;}
+  /* all layers converge to the same transform at the same moment, so there is no double image */
+  .cl{transform-origin:50% 32%;will-change:transform,opacity;}
+
+  /* 1. fog: very soft, wide, drifts in from the left and grows into place */
+  .fog{opacity:0;transform:translateX(-40px) scale(1.14);
+    animation: fogIn 2.4s cubic-bezier(.22,.7,.3,1) .2s forwards, fogOut 1.4s ease-in-out 2.4s forwards;}
+  .fog img{filter:blur(26px);}
+  @keyframes fogIn {to{opacity:.9;transform:translateX(0) scale(1)}}
+  @keyframes fogOut{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.04)}}
+
+  /* shared soft wave: a wide feathered mask slides left -> right */
+  .wave{
+    -webkit-mask-image:linear-gradient(100deg,#000 0%,#000 36%,rgba(0,0,0,.5) 46%,rgba(0,0,0,0) 60%);
+            mask-image:linear-gradient(100deg,#000 0%,#000 36%,rgba(0,0,0,.5) 46%,rgba(0,0,0,0) 60%);
+    -webkit-mask-size:300% 100%;mask-size:300% 100%;
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+    -webkit-mask-position:100% 0;mask-position:100% 0;}
+  @keyframes waveIn{
+    from{-webkit-mask-position:100% 0;mask-position:100% 0}
+    to  {-webkit-mask-position:0% 0;mask-position:0% 0}}
+
+  /* 2. half-focused cloud letters lead the wave */
+  .soft{opacity:0;transform:scale(1.06);
+    animation: waveIn 1.9s cubic-bezier(.4,.1,.3,1) .55s forwards, settle 2.2s cubic-bezier(.22,.7,.3,1) .45s forwards,
+               softOut 1s ease-in-out 2.7s forwards;}
+  .soft img{filter:blur(7px);}
+  .fog img,.soft img{will-change:transform;}   /* own layer: the blur is rasterised once, the mask moves over it */
+  @keyframes softOut{from{opacity:1}to{opacity:0}}
+
+  /* 3. sharp letters follow the soft ones */
+  .sharp{opacity:0;transform:scale(1.06);
+    animation: waveIn 1.9s cubic-bezier(.4,.1,.3,1) 1.0s forwards, settle 2.2s cubic-bezier(.22,.7,.3,1) .45s forwards;}
+  @keyframes settle{0%{opacity:0;transform:scale(1.06)}20%{opacity:1}100%{opacity:1;transform:scale(1)}}
 
   /* drifting puffs around the letters */
   .puff{
@@ -174,8 +202,9 @@
 
     <div class="cloudWrap">
       <div class="cloudStack" id="cloudStack">
-        <img class="mist" src="assets/cloud.png" alt="">
-        <img class="sharp" src="assets/cloud.png" alt="internet de la 69 lei">
+        <div class="cl fog"><img src="assets/cloud.png" alt=""></div>
+        <div class="cl soft wave"><img src="assets/cloud.png" alt=""></div>
+        <div class="cl sharp wave"><img src="assets/cloud.png" alt="internet de la 69 lei"></div>
         <div class="shine"></div>
       </div>
       <div class="puffs" id="puffs"></div>
