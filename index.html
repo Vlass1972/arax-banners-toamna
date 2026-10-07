@@ -73,7 +73,7 @@
   .cloudWrap img{width:100%;height:auto;}
 
   /* cloud text: fog rolls in, then the letters come into focus in a soft wave, left to right.
-     Three stacked copies of the same image: heavy blur, light blur, sharp.
+     Two stacked copies of the same image: heavy-blur fog and the sharp letters.
      Blur is static (rasterised once). Animated: opacity, transform, and the mask position of plain wrappers. */
   .cloudStack{position:relative;top:-44px;width:100%;aspect-ratio:1085/1449;}
   .cl{position:absolute;inset:0;}
@@ -84,7 +84,7 @@
   /* 1. fog: very soft, wide, drifts in from the left and grows into place */
   .fog{opacity:0;transform:translateX(-40px) scale(1.14);
     animation: fogIn 2.4s cubic-bezier(.22,.7,.3,1) .2s forwards, fogOut 1.4s ease-in-out 2.4s forwards;}
-  .fog img{filter:blur(26px);}
+  .fog img{filter:blur(26px);will-change:transform;}   /* own layer: blur is rasterised once */
   @keyframes fogIn {to{opacity:.9;transform:translateX(0) scale(1)}}
   @keyframes fogOut{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.04)}}
 
@@ -99,17 +99,9 @@
     from{-webkit-mask-position:100% 0;mask-position:100% 0}
     to  {-webkit-mask-position:0% 0;mask-position:0% 0}}
 
-  /* 2. half-focused cloud letters lead the wave */
-  .soft{opacity:0;transform:scale(1.06);
-    animation: waveIn 1.9s cubic-bezier(.4,.1,.3,1) .55s forwards, settle 2.2s cubic-bezier(.22,.7,.3,1) .45s forwards,
-               softOut 1s ease-in-out 2.7s forwards;}
-  .soft img{filter:blur(7px);}
-  .fog img,.soft img{will-change:transform;}   /* own layer: the blur is rasterised once, the mask moves over it */
-  @keyframes softOut{from{opacity:1}to{opacity:0}}
-
-  /* 3. sharp letters follow the soft ones */
+  /* 2. sharp letters come out of the fog in a soft wave */
   .sharp{opacity:0;transform:scale(1.06);
-    animation: waveIn 1.9s cubic-bezier(.4,.1,.3,1) 1.0s forwards, settle 2.2s cubic-bezier(.22,.7,.3,1) .45s forwards;}
+    animation: waveIn 2.0s cubic-bezier(.4,.1,.3,1) .75s forwards, settle 2.2s cubic-bezier(.22,.7,.3,1) .45s forwards;}
   @keyframes settle{0%{opacity:0;transform:scale(1.06)}20%{opacity:1}100%{opacity:1;transform:scale(1)}}
 
   /* drifting puffs around the letters */
@@ -203,7 +195,6 @@
     <div class="cloudWrap">
       <div class="cloudStack" id="cloudStack">
         <div class="cl fog"><img src="assets/cloud.png" alt=""></div>
-        <div class="cl soft wave"><img src="assets/cloud.png" alt=""></div>
         <div class="cl sharp wave"><img src="assets/cloud.png" alt="internet de la 69 lei"></div>
         <div class="shine"></div>
       </div>
