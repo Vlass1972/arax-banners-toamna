@@ -279,16 +279,21 @@
   const CFG=window.AD_CFG||{};                 // per-format settings injected by google/build.js (empty on the site)
   const W=CFG.W||1085,H=CFG.H||1450;
   const BS=CFG.burst||1;                         // scale for burst/puff distances and sizes
+  // Fit the stage with CSS zoom where supported: the browser then lays out and rasterizes every layer at its real
+  // on-screen size. With transform:scale() mobile Safari keeps layers at the full design size (x3 for the screen),
+  // which runs out of graphics memory and leaves blank rectangles. transform:scale() stays as the fallback.
+  const useZoom=!!(window.CSS&&CSS.supports&&CSS.supports('zoom','0.5'));
   function fit(){
     const s=Math.min(innerWidth/W,innerHeight/H);
-    stage.style.transform='scale('+s+')';
+    if(useZoom){stage.style.zoom=s;stage.style.transform='none';}
+    else stage.style.transform='scale('+s+')';
   }
   addEventListener('resize',fit);fit();
 
   // Moving bits are driven by the Web Animations API with concrete numbers (no CSS variables inside keyframes),
   // so Safari can hand all of them to the GPU. They are started together with the CSS timeline below.
   const scripted=[];
-  const queue=(el,keyframes,options)=>scripted.push([el,keyframes,options]);
+  const queue=(el,keyframes,options,removeWhenDone)=>scripted.push([el,keyframes,options,removeWhenDone]);
   const rnd=(a,b)=>a+Math.random()*(b-a);
   const px=v=>v.toFixed(1)+'px';
 
@@ -344,7 +349,7 @@
       {offset:0,   opacity:0, transform:'translate(0px,0px) scale(.3)',easing:ease},
       {offset:.12, opacity:1, easing:ease},
       {offset:1,   opacity:0, transform:'translate('+px(Math.cos(ang)*dist)+','+px(Math.sin(ang)*dist)+') scale('+rnd(1.2,2).toFixed(2)+')'}
-    ],{duration:rnd(.9,1.4)*1000,delay:(1.12+rnd(0,.1))*1000,fill:'forwards'});
+    ],{duration:rnd(.9,1.4)*1000,delay:(1.12+rnd(0,.1))*1000,fill:'forwards'},true);
   }
   for(let i=0;i<9;i++){
     const l=document.createElement('div');l.className='leafShot';
@@ -360,7 +365,7 @@
       {offset:.35, transform:'translate('+px(dx)+','+px(dy)+') rotate('+r.toFixed(0)+'deg) scale(1)',easing:'cubic-bezier(.4,0,.8,.6)'},
       {offset:.85, opacity:1},
       {offset:1,   opacity:0, transform:'translate('+px(dx*1.25)+','+px(dy+620*BS)+') rotate('+(r*3).toFixed(0)+'deg) scale(1)'}
-    ],{duration:rnd(2.2,3)*1000,delay:(1.14+rnd(0,.08))*1000,fill:'forwards'});
+    ],{duration:rnd(2.2,3)*1000,delay:(1.14+rnd(0,.08))*1000,fill:'forwards'},true);
   }
 
   // start the whole timeline only once the images are decoded
@@ -374,7 +379,10 @@
   Promise.all(allImgs.map(i=>i.decode().catch(()=>{})).concat(fontReady)).then(()=>{
     stage.classList.remove("loading");
     if(!reduceMotion&&typeof Element.prototype.animate==='function')
-      scripted.forEach(([el,keyframes,options])=>el.animate(keyframes,options));
+      scripted.forEach(([el,keyframes,options,removeWhenDone])=>{
+        const an=el.animate(keyframes,options);
+        if(removeWhenDone)an.onfinish=()=>el.remove();   // burst bits are invisible once done: free their layers
+      });
     if(freezeAt!==null)document.getAnimations().forEach(an=>{an.pause();an.currentTime=+freezeAt*1000;});
     // ad builds: everything holds still after CFG.stopAt seconds (Google Ads: animation must stop within 30s)
     else if(CFG.stopAt)setTimeout(()=>document.getAnimations().forEach(an=>an.pause()),CFG.stopAt*1000);

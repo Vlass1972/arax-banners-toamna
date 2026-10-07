@@ -3,8 +3,8 @@
     "format": "300x250",
     "w": 300,
     "h": 250,
-    "zip": "355.0 KB",
-    "zipBytes": 363538,
+    "zip": "355.3 KB",
+    "zipBytes": 363825,
     "ok": true,
     "quality": {
       "rung": 0,
@@ -23,15 +23,15 @@
       "cloud.png": "68.9 KB",
       "girl-a.png": "17.6 KB",
       "girl.jpg": "94.3 KB",
-      "index.html": "22.1 KB"
+      "index.html": "22.7 KB"
     }
   },
   {
     "format": "300x250-2",
     "w": 300,
     "h": 250,
-    "zip": "313.2 KB",
-    "zipBytes": 320754,
+    "zip": "313.5 KB",
+    "zipBytes": 321040,
     "ok": true,
     "quality": {
       "rung": 0,
@@ -50,15 +50,15 @@
       "cloud.png": "68.9 KB",
       "girl-a.png": "17.6 KB",
       "girl.jpg": "94.3 KB",
-      "index.html": "22.1 KB"
+      "index.html": "22.7 KB"
     }
   },
   {
     "format": "300x600",
     "w": 300,
     "h": 600,
-    "zip": "559.6 KB",
-    "zipBytes": 573014,
+    "zip": "559.9 KB",
+    "zipBytes": 573302,
     "ok": true,
     "quality": {
       "rung": 2,
@@ -77,7 +77,7 @@
       "cloud.png": "149.3 KB",
       "girl-a.png": "29.0 KB",
       "girl.jpg": "151.7 KB",
-      "index.html": "22.1 KB"
+      "index.html": "22.7 KB"
     }
   }
 ]
