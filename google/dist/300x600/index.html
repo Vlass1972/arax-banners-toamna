@@ -203,6 +203,10 @@
   .fog img{filter:blur(23.83px)}
   .flash{width:281.67px;height:281.67px;margin:-140.83px 0 0 -140.83px}
   .girl{left:150px;top:642px;width:1000px}
+  /* girl = true-colour JPEG + alpha mask; the shadow sits on a static wrapper so it is painted once */
+  .girl .gs{filter:drop-shadow(0 30px 30px rgba(0,20,60,.35))}
+  .girl img{filter:none;-webkit-mask-image:url(girl-a.png);mask-image:url(girl-a.png);
+    -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
   .pair{left:175.02px;top:1729.38px;width:1171.88px;height:390.63px}
   .floorGlow{left:760.96px;top:1924.69px;width:1093.75px;height:296.88px}
   .cta{left:22px;top:1576px;cursor:pointer}
@@ -258,7 +262,7 @@
       <div class="puffs" id="puffs"></div>
     </div>
 
-    <div class="girl"><img src="girl.png" alt=""></div>
+    <div class="girl"><div class="gs"><img src="girl.jpg" alt=""></div></div>
 
     <div class="cta">
       <span class="ctaHover"><span class="ctaPulse">
@@ -272,7 +276,7 @@
   </div>
 </div>
 
-<script>window.AD_CFG={"W":1085,"H":2170,"leaves":22,"burst":1.08,"stopAt":27,"debugParam":"__arax_t"};</script>
+<script>window.AD_CFG={"W":1085,"H":2170,"leaves":22,"burst":1.08,"stopAt":27,"debugParam":"__arax_t","preload":["girl-a.png"]};</script>
 <script>
 (function(){
   // fit stage to window
@@ -367,7 +371,8 @@
   // start the whole timeline only once the images are decoded
   const freezeAt=new URLSearchParams(location.search).get(CFG.debugParam||"t"); // debug: ?t=1.6 freezes the whole timeline (ad builds use an unusual name)
   const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const allImgs=[...document.querySelectorAll(".stage img")];
+  const allImgs=[...document.querySelectorAll(".stage img")]
+    .concat((CFG.preload||[]).map(src=>{const i=new Image();i.src=src;return i;}));   // e.g. mask images in ad builds
   const fontReady=document.fonts&&document.fonts.load
     ? Promise.race([document.fonts.load("800 36px Montserrat","Conectează-te acum"),new Promise(r=>setTimeout(r,1500))]).catch(()=>{})
     : Promise.resolve();

@@ -11,6 +11,9 @@
 
   Every format uses the site's design units: the stage is 1085 units wide, so all animation constants stay valid,
   and only positions/sizes below are per format. The stage is scaled to the ad size at runtime.
+
+  Image quality: each format walks down QUALITY_LADDER and keeps the first rung whose zip fits TARGET_ZIP,
+  so every format gets the best quality that still passes Google's 600 KB limit.
 */
 const fs = require('fs');
 const path = require('path');
@@ -21,12 +24,25 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
-const MAX_ZIP = 600 * 1024;            // Google Ads: zip of 600 KB or smaller
+const MAX_ZIP = 600 * 1000;            // Google Ads: zip of 600 KB or smaller (the stricter reading: 600 000 bytes)
+const TARGET_ZIP = 580 * 1000;         // aim a little below the limit
 const MAX_FILES = 40;                  // Google Ads: no more than 40 files
 const ALLOWED_EXT = new Set(['.html', '.css', '.js', '.gif', '.png', '.jpg', '.jpeg', '.svg']);
 const ALLOWED_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];   // Google Fonts is the allowed external
 const STOP_AT = 27.0;                  // seconds; a touch-down moment, well inside the 30 s limit
-const DENSITY = 2;                     // export images at 2x of their CSS size
+const BG_DENSITY = 2;                  // backgrounds are supplied at 2x of the ad size
+
+// bgQ: background JPEG quality (full 4:4:4 colour); girlD / cloudD: pixel density vs. on-screen size;
+// girlQ: girl JPEG quality (true colour, alpha travels in a separate mask). Clouds stay palette PNG: near-lossless for that art.
+const QUALITY_LADDER = [
+  { bgQ: 92, girlD: 3, girlQ: 90, cloudD: 3 },
+  { bgQ: 90, girlD: 3, girlQ: 88, cloudD: 3 },
+  { bgQ: 88, girlD: 2.5, girlQ: 90, cloudD: 3 },
+  { bgQ: 88, girlD: 2.5, girlQ: 88, cloudD: 2.5 },
+  { bgQ: 85, girlD: 2.5, girlQ: 86, cloudD: 2.5 },
+  { bgQ: 82, girlD: 2, girlQ: 86, cloudD: 2 },
+  { bgQ: 80, girlD: 2, girlQ: 85, cloudD: 2 },
+];
 
 // source art, native pixels
 const GIRL = { w: 1086, h: 1449, tip: [473, 41], foot: [663.5, 1393], leg: 558 }; // fingertip, standing-foot contact, standing leg left edge
@@ -98,6 +114,10 @@ function css(f, G) {
   .fog img{filter:blur(${r2(22 * G.cs)}px)}
   .flash{width:${r2(260 * G.cs)}px;height:${r2(260 * G.cs)}px;margin:${r2(-130 * G.cs)}px 0 0 ${r2(-130 * G.cs)}px}
   .girl{left:${f.girl.x}px;top:${f.girl.y}px;width:${f.girl.w}px}
+  /* girl = true-colour JPEG + alpha mask; the shadow sits on a static wrapper so it is painted once */
+  .girl .gs{filter:drop-shadow(0 30px 30px rgba(0,20,60,.35))}
+  .girl img{filter:none;-webkit-mask-image:url(girl-a.png);mask-image:url(girl-a.png);
+    -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
   .pair{left:${r2(G.foot[0] - 375 * G.gs)}px;top:${r2(G.foot[1] - 125 * G.gs)}px;width:${r2(750 * G.gs)}px;height:${r2(250 * G.gs)}px}
   .floorGlow{left:${r2(G.foot[0])}px;top:${r2(G.foot[1])}px;width:${r2(700 * G.gs)}px;height:${r2(190 * G.gs)}px}
   .cta{left:${f.cta.x - 14}px;top:${f.cta.y - 14}px;cursor:pointer}
@@ -128,37 +148,83 @@ function html(f, G) {
   s = rep(s, 'text=Conecteaz%C4%83-te%20acum&', 'text=Conecteaz%C4%83-te%20acum%20arax.md%20de%20la&', 'font subset');
   s = rep(s, 'assets/bg.png', 'bg.jpg');
   s = rep(s, 'assets/cloud.png', 'cloud.png');
-  s = rep(s, 'assets/girl.png', 'girl.png');
+  s = rep(s, '<div class="girl"><img src="assets/girl.png" alt=""></div>',
+    '<div class="girl"><div class="gs"><img src="girl.jpg" alt=""></div></div>', 'girl');
   s = rep(s, '<div class="cl sharp"><img src="cloud.png" alt="internet de la 69 lei"></div>',
     '<div class="cl sharp"><img src="cloud.png" alt="internet de la 69 lei"><span class="deLa">de la</span></div>', 'sharp layer');
   // Google Ads makes the whole ad clickable to the final URL set in the ad; own exits are not allowed
   s = rep(s, '<a class="cta" href="https://arax.md" target="_blank" rel="noopener">', '<div class="cta">', 'cta link');
   s = rep(s, '    </a>\n   </div>', '    </div>\n\n    <div class="adLabel">arax.md</div>\n   </div>', 'cta end');
   s = rep(s, '</style>\n</head>', css(f, G) + '</style>\n</head>', 'style end');
-  const cfg = { W: SW, H: r2(G.H), leaves: f.leaves, burst: r2(G.cs), stopAt: STOP_AT, debugParam: '__arax_t' };
+  const cfg = { W: SW, H: r2(G.H), leaves: f.leaves, burst: r2(G.cs), stopAt: STOP_AT, debugParam: '__arax_t', preload: ['girl-a.png'] };
   s = rep(s, '<script>\n(function(){', `<script>window.AD_CFG=${JSON.stringify(cfg)};</script>\n<script>\n(function(){`, 'main script');
   return s;
 }
 
-async function images(f, G, dir) {
-  const notes = [];
-  // background: exact ad size at 2x, JPEG
-  const bgW = f.w * DENSITY, bgH = f.h * DENSITY;
-  // own background: google/src/bg-300x250.jpg, or assets/bg-600x500*.jpg (the 2x size in the name), png also fine
-  const own = ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p))
+// Transparent pixels get the colour of the nearest opaque area, so the JPEG has no dark fringe under the soft mask edge.
+function bleed(data, W, H) {
+  const n = W * H, pre = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const a = data[i * 4 + 3] / 255;
+    pre[i * 4] = data[i * 4] * a; pre[i * 4 + 1] = data[i * 4 + 1] * a; pre[i * 4 + 2] = data[i * 4 + 2] * a; pre[i * 4 + 3] = a;
+  }
+  const blur = (src, r) => {
+    const tmp = new Float32Array(src.length), out = new Float32Array(src.length), cl = (v, m) => v < 0 ? 0 : v > m ? m : v;
+    for (let y = 0; y < H; y++) for (let c = 0; c < 4; c++) {
+      let acc = 0; for (let x = -r; x <= r; x++) acc += src[(y * W + cl(x, W - 1)) * 4 + c];
+      for (let x = 0; x < W; x++) { tmp[(y * W + x) * 4 + c] = acc; acc += src[(y * W + cl(x + r + 1, W - 1)) * 4 + c] - src[(y * W + cl(x - r, W - 1)) * 4 + c]; }
+    }
+    for (let x = 0; x < W; x++) for (let c = 0; c < 4; c++) {
+      let acc = 0; for (let y = -r; y <= r; y++) acc += tmp[(cl(y, H - 1) * W + x) * 4 + c];
+      for (let y = 0; y < H; y++) { out[(y * W + x) * 4 + c] = acc; acc += tmp[(cl(y + r + 1, H - 1) * W + x) * 4 + c] - tmp[(cl(y - r, H - 1) * W + x) * 4 + c]; }
+    }
+    return out;
+  };
+  const near = blur(pre, 6), far = blur(pre, 40);
+  const rgb = Buffer.alloc(n * 3), alpha = Buffer.alloc(n);
+  for (let i = 0; i < n; i++) {
+    const a = data[i * 4 + 3]; alpha[i] = a;
+    for (let c = 0; c < 3; c++) {
+      let v;
+      if (a > 0) v = data[i * 4 + c];
+      else if (near[i * 4 + 3] > 1e-3) v = near[i * 4 + c] / near[i * 4 + 3];
+      else if (far[i * 4 + 3] > 1e-3) v = far[i * 4 + c] / far[i * 4 + 3];
+      else v = 150;
+      rgb[i * 3 + c] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+    }
+  }
+  return { rgb, alpha };
+}
+
+function ownBackground(f) {
+  const bgW = f.w * BG_DENSITY, bgH = f.h * BG_DENSITY;
+  // google/src/bg-300x250.jpg, or assets/bg-600x500*.jpg (the 2x size in the name); png also fine
+  return ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p))
     || fs.readdirSync(path.join(ROOT, 'assets')).filter(n => n.startsWith(`bg-${bgW}x${bgH}`) && /\.(png|jpe?g)$/i.test(n))
-         .map(n => path.join(ROOT, 'assets', n))[0];
-  const bgSrc = own || path.join(ROOT, 'assets', 'bg.png');
+      .map(n => path.join(ROOT, 'assets', n))[0];
+}
+
+async function images(f, G, dir, q) {
+  const notes = [];
+  // background: exact ad size at 2x, JPEG with full colour resolution
+  const bgW = f.w * BG_DENSITY, bgH = f.h * BG_DENSITY, own = ownBackground(f);
   notes.push(own ? 'background: ' + path.relative(ROOT, own).split(path.sep).join('/') : 'PLACEHOLDER background cut from assets/bg.png');
-  await sharp(bgSrc).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition })
-    .jpeg({ quality: 80, mozjpeg: true }).toFile(path.join(dir, 'bg.jpg'));
-  // girl and clouds: exactly the size they are shown at, 2x, palette PNG keeps transparency
-  const girlPx = Math.round(f.girl.w * G.scale * DENSITY);
-  await sharp(path.join(ROOT, 'assets', 'girl.png')).resize({ width: girlPx })
-    .png({ palette: true, quality: 85, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'girl.png'));
-  const cloudPx = Math.round(f.cloud.w * G.scale * DENSITY);
+  await sharp(own || path.join(ROOT, 'assets', 'bg.png')).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition })
+    .jpeg({ quality: q.bgQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'bg.jpg'));
+  // girl: true-colour JPEG + alpha mask (palette PNG of one colour with 256 alpha levels: exact and small)
+  const girlPx = Math.round(f.girl.w * G.scale * q.girlD);
+  const { data, info } = await sharp(path.join(ROOT, 'assets', 'girl.png')).resize({ width: girlPx }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { rgb, alpha } = bleed(data, info.width, info.height);
+  await sharp(rgb, { raw: { width: info.width, height: info.height, channels: 3 } })
+    .jpeg({ quality: q.girlQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'girl.jpg'));
+  const mask = Buffer.alloc(info.width * info.height * 4);
+  for (let i = 0; i < alpha.length; i++) mask[i * 4 + 3] = alpha[i];
+  await sharp(mask, { raw: { width: info.width, height: info.height, channels: 4 } })
+    .png({ palette: true, quality: 100, dither: 0, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'girl-a.png'));
+  // clouds: palette PNG keeps the transparency and is near-lossless for this white/blue art
+  const cloudPx = Math.round(f.cloud.w * G.scale * q.cloudD);
   await sharp(await cloudWithoutDeLa(), { raw: { width: CLOUD.w, height: CLOUD.h, channels: 4 } }).resize({ width: cloudPx })
-    .png({ palette: true, quality: 90, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'cloud.png'));
+    .png({ palette: true, quality: 100, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'cloud.png'));
   return notes;
 }
 
@@ -219,7 +285,8 @@ function validate(f, G, dir, zipSize) {
   for (const m of s.matchAll(/https?:\/\/([^\/\s"'<>)]+)/g)) if (!ALLOWED_HOSTS.includes(m[1])) problems.push(`external reference: ${m[0]}`);
   if (/<a\s[^>]*href=/i.test(s)) problems.push('own click-through link present');
   if (/localStorage|sessionStorage|indexedDB/.test(s)) problems.push('storage API used');
-  if (zipSize > MAX_ZIP) problems.push(`zip too big: ${kb(zipSize)} > ${kb(MAX_ZIP)}`);
+  for (const ref of ['bg.jpg', 'girl.jpg', 'girl-a.png', 'cloud.png']) if (!files.includes(ref)) problems.push(`missing asset: ${ref}`);
+  if (zipSize > MAX_ZIP) problems.push(`zip too big: ${(zipSize / 1000).toFixed(1)} KB > ${MAX_ZIP / 1000} KB`);
   if (f.cta.x + G.cta.w + 24 > G.legX) problems.push(`CTA (${Math.round(f.cta.x + G.cta.w)}) runs into the standing leg (${Math.round(G.legX)})`);
   return { files, problems };
 }
@@ -230,19 +297,25 @@ function validate(f, G, dir, zipSize) {
   for (const f of FORMATS) {
     const G = geometry(f);
     const dir = path.join(DIST, f.id);
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'index.html'), html(f, G));
-    const notes = await images(f, G, dir);
     const zipFile = path.join(DIST, `arax-toamna-${f.id}.zip`);
-    const zipSize = zip(dir, zipFile);
+    let zipSize = 0, notes = [], rung = -1;
+    for (let i = 0; i < QUALITY_LADDER.length; i++) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'index.html'), html(f, G));
+      notes = await images(f, G, dir, QUALITY_LADDER[i]);
+      zipSize = zip(dir, zipFile);
+      rung = i;
+      if (zipSize <= TARGET_ZIP) break;
+    }
     const { files, problems } = validate(f, G, dir, zipSize);
     const sizes = Object.fromEntries(files.map(n => [n, kb(fs.statSync(path.join(dir, n)).size)]));
-    report.push({ format: f.id, zip: kb(zipSize), ok: problems.length === 0, problems, notes, sizes });
+    report.push({ format: f.id, zip: kb(zipSize), zipBytes: zipSize, ok: problems.length === 0, quality: { rung, ...QUALITY_LADDER[rung] }, problems, notes, sizes });
   }
   fs.writeFileSync(path.join(DIST, 'report.json'), JSON.stringify(report, null, 2));
   for (const r of report) {
-    console.log(`\n${r.format}: zip ${r.zip}  ${r.ok ? 'OK' : 'PROBLEMS'}`);
+    const q = r.quality;
+    console.log(`\n${r.format}: zip ${r.zip} (${r.zipBytes} bytes)  ${r.ok ? 'OK' : 'PROBLEMS'}  quality rung ${q.rung}: bg q${q.bgQ}, girl ${q.girlD}x q${q.girlQ}, clouds ${q.cloudD}x`);
     for (const [n, s] of Object.entries(r.sizes)) console.log(`   ${n.padEnd(12)} ${s}`);
     for (const p of r.problems) console.log('   ! ' + p);
     for (const n of r.notes) console.log('   * ' + n);

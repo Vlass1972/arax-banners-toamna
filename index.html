@@ -333,7 +333,8 @@
   // start the whole timeline only once the images are decoded
   const freezeAt=new URLSearchParams(location.search).get(CFG.debugParam||"t"); // debug: ?t=1.6 freezes the whole timeline (ad builds use an unusual name)
   const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const allImgs=[...document.querySelectorAll(".stage img")];
+  const allImgs=[...document.querySelectorAll(".stage img")]
+    .concat((CFG.preload||[]).map(src=>{const i=new Image();i.src=src;return i;}));   // e.g. mask images in ad builds
   const fontReady=document.fonts&&document.fonts.load
     ? Promise.race([document.fonts.load("800 36px Montserrat","Conectează-te acum"),new Promise(r=>setTimeout(r,1500))]).catch(()=>{})
     : Promise.resolve();
