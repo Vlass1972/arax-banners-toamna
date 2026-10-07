@@ -25,10 +25,10 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 const MAX_ZIP = 600 * 1000;            // Google Ads: zip of 600 KB or smaller (the stricter reading: 600 000 bytes)
-const TARGET_ZIP = 580 * 1000;         // aim a little below the limit
+const TARGET_ZIP = 590 * 1000;         // aim a little below the limit
 const MAX_FILES = 40;                  // Google Ads: no more than 40 files
 const ALLOWED_EXT = new Set(['.html', '.css', '.js', '.gif', '.png', '.jpg', '.jpeg', '.svg']);
-const ALLOWED_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];   // Google Fonts is the allowed external
+const ALLOWED_HOSTS = [];             // Google Ads upload rejected even Google Fonts links: everything must be inside the zip
 const STOP_AT = 27.0;                  // seconds; a touch-down moment, well inside the 30 s limit
 const BG_DENSITY = 2;                  // backgrounds are supplied at 2x of the ad size
 
@@ -168,10 +168,13 @@ function css(f, G) {
 `;
 }
 
-function html(f, G) {
+function html(f, G, fontCss) {
   let s = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   s = rep(s, '<meta charset="utf-8">', `<meta charset="utf-8">\n<meta name="ad.size" content="width=${f.w},height=${f.h}">`);
-  s = rep(s, 'text=Conecteaz%C4%83-te%20acum&', `text=Conecteaz%C4%83-te%20acum%20de%20la${f.label ? '%20arax.md' : ''}&`, 'font subset');
+  // web font travels inside the HTML (base64 woff2): font files are not an allowed zip type and external links are rejected
+  s = rep(s, '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n', '', 'font preconnect');
+  s = s.replace(/<!-- Montserrat 800[^>]*-->\n<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2[^"]*">\n/, () => `<style>${fontCss}</style>\n`);
+  if (/fonts\.googleapis|fonts\.gstatic/.test(s)) throw new Error('font link still present');
   s = rep(s, 'assets/bg.png', 'bg.jpg');
   s = rep(s, 'assets/cloud.png', 'cloud.png');
   s = rep(s, '<div class="girl"><img src="assets/girl.png" alt=""></div>',
@@ -296,6 +299,29 @@ async function cloudWithoutDeLa() {
   return (cloudRaw = data);
 }
 
+// Characters the ad needs from Montserrat 800 (button, "de la", optional label).
+function fontText(f) { return 'Conectează-te acum de la' + (f.label ? ' arax.md' : ''); }
+
+// Montserrat 800 (SIL Open Font License), subset to the given text, as an inline @font-face.
+// Downloaded once from Google Fonts and cached in google/src, so later builds work offline.
+async function embeddedFont(text) {
+  const chars = [...new Set(text)].sort().join('');
+  const key = require('crypto').createHash('sha1').update(chars).digest('hex').slice(0, 10);
+  const cache = path.join(SRC, `montserrat-800-${key}.woff2`);
+  if (!fs.existsSync(cache)) {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+    const cssUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=block&text=' + encodeURIComponent(chars);
+    const css = await (await fetch(cssUrl, { headers: { 'User-Agent': ua } })).text();
+    const m = css.match(/url\((https:[^)]+)\)\s*format\('woff2'\)/);
+    if (!m) throw new Error('could not find a woff2 font in the Google Fonts response');
+    const font = Buffer.from(await (await fetch(m[1], { headers: { 'User-Agent': ua } })).arrayBuffer());
+    fs.mkdirSync(SRC, { recursive: true });
+    fs.writeFileSync(cache, font);
+  }
+  const b64 = fs.readFileSync(cache).toString('base64');
+  return `@font-face{font-family:'Montserrat';font-style:normal;font-weight:800;font-display:block;src:url(data:font/woff2;base64,${b64}) format('woff2')}`;
+}
+
 function zip(dir, file) {
   if (fs.existsSync(file)) fs.unlinkSync(file);
   execFileSync('powershell', ['-NoProfile', '-Command',
@@ -316,7 +342,7 @@ function validate(f, G, dir, zipSize) {
   const s = fs.readFileSync(path.join(dir, htmls[0]), 'utf8');
   if (!s.includes(`<meta name="ad.size" content="width=${f.w},height=${f.h}">`)) problems.push('ad.size meta missing');
   if (!/^<!DOCTYPE html>/i.test(s) || !/<html[\s>]/i.test(s) || !/<body[\s>]/i.test(s)) problems.push('doctype/html/body missing');
-  for (const m of s.matchAll(/https?:\/\/([^\/\s"'<>)]+)/g)) if (!ALLOWED_HOSTS.includes(m[1])) problems.push(`external reference: ${m[0]}`);
+  for (const m of s.matchAll(/(?:https?:)?\/\/([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g)) if (!ALLOWED_HOSTS.includes(m[1])) problems.push(`external reference: ${m[0]}`);
   if (/<a\s[^>]*href=/i.test(s)) problems.push('own click-through link present');
   if (/localStorage|sessionStorage|indexedDB/.test(s)) problems.push('storage API used');
   for (const ref of ['bg.jpg', 'girl.jpg', 'girl-a.png', 'cloud.png']) if (!files.includes(ref)) problems.push(`missing asset: ${ref}`);
@@ -333,10 +359,11 @@ function validate(f, G, dir, zipSize) {
     const dir = path.join(DIST, f.id);
     const zipFile = path.join(DIST, `arax-toamna-${f.id}.zip`);
     let zipSize = 0, notes = [], rung = -1;
+    const fontCss = await embeddedFont(fontText(f));
     for (let i = 0; i < QUALITY_LADDER.length; i++) {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'index.html'), html(f, G));
+      fs.writeFileSync(path.join(dir, 'index.html'), html(f, G, fontCss));
       notes = await images(f, G, dir, QUALITY_LADDER[i]);
       if (!f.label) notes.push('policy risk: no advertiser name, logo or URL on the final frame (Google Ads "Unidentified business")');
       zipSize = zip(dir, zipFile);
