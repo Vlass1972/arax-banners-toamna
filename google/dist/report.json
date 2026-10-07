@@ -55,8 +55,8 @@
     "format": "300x600",
     "w": 300,
     "h": 600,
-    "zip": "557.3 KB",
-    "zipBytes": 570722,
+    "zip": "559.6 KB",
+    "zipBytes": 573075,
     "ok": true,
     "quality": {
       "rung": 2,
@@ -70,7 +70,7 @@
       "background: assets/bg-600x1200-HQ.jpg"
     ],
     "sizes": {
-      "bg.jpg": "224.6 KB",
+      "bg.jpg": "226.8 KB",
       "cloud.png": "149.3 KB",
       "girl-a.png": "29.0 KB",
       "girl.jpg": "151.7 KB",

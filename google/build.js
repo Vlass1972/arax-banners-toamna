@@ -73,7 +73,7 @@ const FORMATS = [
     label: { left: 40, bottom: 56, font: 40 },
     placeholderPosition: 'centre',
     // edge darkening baked into the background only (more contrast for the clouds, button and label)
-    shade: { top: { to: 0.5, alpha: 0.34, color: [4, 14, 38] }, bottom: { from: 0.72, alpha: 0.38, color: [8, 6, 4] } },
+    shade: { top: { to: 0.5, alpha: 0.24, color: [4, 14, 38] }, bottom: { from: 0.72, alpha: 0.28, color: [8, 6, 4] } },
   },
 ];
 
