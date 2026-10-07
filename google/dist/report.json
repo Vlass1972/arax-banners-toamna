@@ -3,8 +3,8 @@
     "format": "300x250",
     "w": 300,
     "h": 250,
-    "zip": "355.1 KB",
-    "zipBytes": 363602,
+    "zip": "355.0 KB",
+    "zipBytes": 363538,
     "ok": true,
     "quality": {
       "rung": 0,
@@ -15,22 +15,23 @@
     },
     "problems": [],
     "notes": [
-      "background: assets/bg-600x500-HQ.jpg"
+      "background: assets/bg-600x500-HQ.jpg",
+      "policy risk: no advertiser name, logo or URL on the final frame (Google Ads \"Unidentified business\")"
     ],
     "sizes": {
       "bg.jpg": "169.4 KB",
       "cloud.png": "68.9 KB",
       "girl-a.png": "17.6 KB",
       "girl.jpg": "94.3 KB",
-      "index.html": "22.4 KB"
+      "index.html": "22.1 KB"
     }
   },
   {
     "format": "300x250-2",
     "w": 300,
     "h": 250,
-    "zip": "313.3 KB",
-    "zipBytes": 320817,
+    "zip": "313.2 KB",
+    "zipBytes": 320754,
     "ok": true,
     "quality": {
       "rung": 0,
@@ -41,14 +42,15 @@
     },
     "problems": [],
     "notes": [
-      "background: assets/bg-600x500-HQ-2.jpg"
+      "background: assets/bg-600x500-HQ-2.jpg",
+      "policy risk: no advertiser name, logo or URL on the final frame (Google Ads \"Unidentified business\")"
     ],
     "sizes": {
       "bg.jpg": "127.6 KB",
       "cloud.png": "68.9 KB",
       "girl-a.png": "17.6 KB",
       "girl.jpg": "94.3 KB",
-      "index.html": "22.4 KB"
+      "index.html": "22.1 KB"
     }
   },
   {
@@ -56,7 +58,7 @@
     "w": 300,
     "h": 600,
     "zip": "559.6 KB",
-    "zipBytes": 573075,
+    "zipBytes": 573014,
     "ok": true,
     "quality": {
       "rung": 2,
@@ -67,14 +69,15 @@
     },
     "problems": [],
     "notes": [
-      "background: assets/bg-600x1200-HQ.jpg"
+      "background: assets/bg-600x1200-HQ.jpg",
+      "policy risk: no advertiser name, logo or URL on the final frame (Google Ads \"Unidentified business\")"
     ],
     "sizes": {
       "bg.jpg": "226.8 KB",
       "cloud.png": "149.3 KB",
       "girl-a.png": "29.0 KB",
       "girl.jpg": "151.7 KB",
-      "index.html": "22.4 KB"
+      "index.html": "22.1 KB"
     }
   }
 ]

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Montserrat 800, subset to the button text (keep text= in sync with the button label) -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&text=Conecteaz%C4%83-te%20acum%20arax.md%20de%20la&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&text=Conecteaz%C4%83-te%20acum%20de%20la&display=swap">
 <style>
   :root{ --w:1085; --h:1450; }
   html,body{margin:0;height:100%;background:#0b1a33;overflow:hidden;}
@@ -219,15 +219,12 @@
     68% {opacity:1;transform:translateX(22px) skewX(5deg);animation-timing-function:ease-in-out}
     100%{opacity:1;transform:translateX(0) skewX(0)}
   }
-  /* "de la" as live text: the baked-in one is ~5 px tall at this size, unreadable */
-  .deLa{position:absolute;left:13%;top:40.4%;transform:translate(-50%,-50%) rotate(-8deg);white-space:nowrap;
-    padding:.2em .5em .24em;border-radius:1em;background:rgba(11,26,51,.86);color:#fff;letter-spacing:.01em;
+  /* "de la" as live text, larger than the baked-in one (~5 px tall at this size); plain white like the artwork,
+     centred where the original sat (between the swoosh and the 6), with a soft dark halo for contrast on the sky */
+  .deLa{position:absolute;left:15.2%;top:41%;transform:translate(-50%,-50%) rotate(-8deg);white-space:nowrap;
+    color:#fff;letter-spacing:.01em;
     font:800 36px/1 Montserrat,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
-    box-shadow:0 2px 6px rgba(0,20,60,.35)}
-  /* advertiser identification on the final frame (Google Ads "Unidentified business" policy) */
-  .adLabel{position:absolute;left:40px;bottom:56px;pointer-events:none;color:#fff;letter-spacing:.02em;
-    font:800 40px/1 Montserrat,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
-    text-shadow:0 2px 6px rgba(0,20,60,.55),0 0 2px rgba(0,20,60,.4)}
+    text-shadow:0 1px 2px rgba(0,25,70,.6),0 0 7px rgba(0,25,70,.45)}
 </style>
 </head>
 <body>
@@ -270,8 +267,6 @@
         <span class="ctaBody">Conectează-te acum<svg viewBox="0 0 22 30" aria-hidden="true"><path d="M5 4l11 11L5 26" fill="none" stroke="#0b1a33" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </span></span>
     </div>
-
-    <div class="adLabel">arax.md</div>
    </div>
   </div>
 </div>
