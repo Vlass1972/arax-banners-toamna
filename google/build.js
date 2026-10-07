@@ -4,7 +4,7 @@
 
     cd google && npm install && npm run build
 
-  Inputs:  google/src/bg-300x250.(png|jpg) and google/src/bg-300x600.(png|jpg), ideally at 2x (600x500, 600x1200).
+  Inputs:  backgrounds at 2x: assets/bg-600x500*.jpg and assets/bg-600x1200*.jpg (or google/src/bg-<format>.jpg).
            If a background is missing, a placeholder is cut from ../assets/bg.png.
   Output:  google/dist/<format>/ (unzipped, used by the preview page google/index.html)
            google/dist/arax-toamna-<format>.zip (upload these to Google Ads)
@@ -144,9 +144,12 @@ async function images(f, G, dir) {
   const notes = [];
   // background: exact ad size at 2x, JPEG
   const bgW = f.w * DENSITY, bgH = f.h * DENSITY;
-  const own = ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p));
+  // own background: google/src/bg-300x250.jpg, or assets/bg-600x500*.jpg (the 2x size in the name), png also fine
+  const own = ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p))
+    || fs.readdirSync(path.join(ROOT, 'assets')).filter(n => n.startsWith(`bg-${bgW}x${bgH}`) && /\.(png|jpe?g)$/i.test(n))
+         .map(n => path.join(ROOT, 'assets', n))[0];
   const bgSrc = own || path.join(ROOT, 'assets', 'bg.png');
-  if (!own) notes.push('PLACEHOLDER background cut from assets/bg.png');
+  notes.push(own ? 'background: ' + path.relative(ROOT, own).split(path.sep).join('/') : 'PLACEHOLDER background cut from assets/bg.png');
   await sharp(bgSrc).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition })
     .jpeg({ quality: 80, mozjpeg: true }).toFile(path.join(dir, 'bg.jpg'));
   // girl and clouds: exactly the size they are shown at, 2x, palette PNG keeps transparency

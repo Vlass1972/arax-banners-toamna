@@ -1,14 +1,14 @@
 [
   {
     "format": "300x250",
-    "zip": "136.4 KB",
+    "zip": "132.6 KB",
     "ok": true,
     "problems": [],
     "notes": [
-      "PLACEHOLDER background cut from assets/bg.png"
+      "background: assets/bg-600x500-HQ.jpg"
     ],
     "sizes": {
-      "bg.jpg": "67.2 KB",
+      "bg.jpg": "63.6 KB",
       "cloud.png": "34.8 KB",
       "girl.png": "27.4 KB",
       "index.html": "21.9 KB"
@@ -16,14 +16,14 @@
   },
   {
     "format": "300x600",
-    "zip": "219.5 KB",
+    "zip": "252.4 KB",
     "ok": true,
     "problems": [],
     "notes": [
-      "PLACEHOLDER background cut from assets/bg.png"
+      "background: assets/bg-600x1200-HQ.jpg"
     ],
     "sizes": {
-      "bg.jpg": "76.1 KB",
+      "bg.jpg": "109.0 KB",
       "cloud.png": "74.6 KB",
       "girl.png": "61.8 KB",
       "index.html": "21.9 KB"
