@@ -38,7 +38,7 @@ const SW = 1085;                       // design width of every format
 const FORMATS = [
   {
     id: '300x250', w: 300, h: 250, leaves: 14,
-    cloud: { x: -10, y: 30, w: 660 },
+    cloud: { x: 50, y: 0, w: 660 },
     girl: { x: 560, y: 110, w: 600 },
     cta: { x: 30, y: 712, font: 42 },
     deLa: { font: 34 },
