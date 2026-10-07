@@ -72,8 +72,29 @@ const FORMATS = [
     deLa: { font: 36 },
     label: { left: 40, bottom: 56, font: 40 },
     placeholderPosition: 'centre',
+    // edge darkening baked into the background only (more contrast for the clouds, button and label)
+    shade: { top: { to: 0.5, alpha: 0.24, color: [4, 14, 38] }, bottom: { from: 0.72, alpha: 0.28, color: [8, 6, 4] } },
   },
 ];
+
+// Soft top/bottom gradient as an SVG overlay; eased stops so no edge of the gradient is visible.
+function shadeSVG(W, H, s) {
+  const ease = [[0, 1], [0.2, 0.62], [0.45, 0.3], [0.7, 0.1], [1, 0]];          // offset -> share of the edge alpha
+  const stops = (c, a, rev) => (rev ? [...ease].reverse() : ease).map(([o, k]) =>
+    `<stop offset="${rev ? 1 - o : o}" stop-color="rgb(${c.join(',')})" stop-opacity="${(a * k).toFixed(3)}"/>`).join('');
+  let defs = '', rects = '';
+  if (s.top) {
+    const h = Math.round(H * s.top.to);
+    defs += `<linearGradient id="t" x1="0" y1="0" x2="0" y2="1">${stops(s.top.color, s.top.alpha, false)}</linearGradient>`;
+    rects += `<rect x="0" y="0" width="${W}" height="${h}" fill="url(#t)"/>`;
+  }
+  if (s.bottom) {
+    const y = Math.round(H * s.bottom.from);
+    defs += `<linearGradient id="b" x1="0" y1="0" x2="0" y2="1">${stops(s.bottom.color, s.bottom.alpha, true)}</linearGradient>`;
+    rects += `<rect x="0" y="${y}" width="${W}" height="${H - y}" fill="url(#b)"/>`;
+  }
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs>${defs}</defs>${rects}</svg>`);
+}
 
 const r2 = v => Math.round(v * 100) / 100;
 const kb = n => (n / 1024).toFixed(1) + ' KB';
@@ -219,8 +240,9 @@ async function images(f, G, dir, q) {
   // background: exact ad size at 2x, JPEG with full colour resolution
   const bgW = f.w * BG_DENSITY, bgH = f.h * BG_DENSITY, own = ownBackground(f);
   notes.push(own ? 'background: ' + path.relative(ROOT, own).split(path.sep).join('/') : 'PLACEHOLDER background cut from assets/bg.png');
-  await sharp(own || path.join(ROOT, 'assets', 'bg.png')).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition })
-    .jpeg({ quality: q.bgQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'bg.jpg'));
+  let bg = sharp(own || path.join(ROOT, 'assets', 'bg.png')).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition });
+  if (f.shade) bg = bg.composite([{ input: shadeSVG(bgW, bgH, f.shade), top: 0, left: 0 }]);
+  await bg.jpeg({ quality: q.bgQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'bg.jpg'));
   // girl: true-colour JPEG + alpha mask (palette PNG of one colour with 256 alpha levels: exact and small)
   const girlPx = Math.round(f.girl.w * G.scale * q.girlD);
   const { data, info } = await sharp(path.join(ROOT, 'assets', 'girl.png')).resize({ width: girlPx }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
