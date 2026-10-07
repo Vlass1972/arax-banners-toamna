@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <title>ARAX toamna</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Montserrat 800, subset to the button text (keep text= in sync with the button label) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&text=Conecteaz%C4%83-te%20acum&display=swap">
 <style>
   :root{ --w:1085; --h:1450; }
   html,body{margin:0;height:100%;background:#0b1a33;overflow:hidden;}
@@ -154,6 +158,36 @@
     100%{opacity:0;transform:translateX(470%) skewX(-25deg)}
   }
 
+  /* ---------- call to action: slides in from the left under the raised leg once the intro is over ---------- */
+  .cta{position:absolute;left:12px;top:1136px;padding:14px;display:block;text-decoration:none;   /* padding = bigger tap area */
+    -webkit-tap-highlight-color:transparent;opacity:0;will-change:transform,opacity;
+    animation: ctaIn .8s 2.6s forwards;}                          /* girl is at the top of her bounce here */
+  @keyframes ctaIn{
+    0%  {opacity:0;transform:translateX(-640px) skewX(-14deg);animation-timing-function:cubic-bezier(.15,.85,.3,1)}
+    15% {opacity:1}
+    68% {opacity:1;transform:translateX(18px) skewX(5deg);animation-timing-function:ease-in-out}
+    100%{opacity:1;transform:translateX(0) skewX(0)}
+  }
+  .ctaHover{display:block;transition:transform .2s ease;will-change:transform;}
+  @media (hover:hover){ .cta:hover .ctaHover{transform:scale(1.04)} }
+  /* pulse + glow in step with the girl's touch-down (same 3.2s beat as the floor rings) */
+  .ctaPulse{display:block;position:relative;will-change:transform;
+    animation: ctaPulse 3.2s ease-out 4.25s infinite;}
+  @keyframes ctaPulse{0%{transform:scale(1)}9%{transform:scale(1.06)}26%{transform:scale(1)}100%{transform:scale(1)}}
+  .ctaGlow{position:absolute;inset:0;border-radius:999px;opacity:0;pointer-events:none;will-change:opacity;
+    box-shadow:0 0 28px 8px rgba(220,255,70,.8),0 0 56px 16px rgba(110,210,255,.35);
+    animation: ctaGlowOnce .7s ease-out 3.25s, ctaGlow 3.2s ease-out 4.25s infinite;}
+  @keyframes ctaGlowOnce{0%{opacity:0}25%{opacity:.9}100%{opacity:0}}
+  @keyframes ctaGlow{0%{opacity:0}8%{opacity:1}50%{opacity:.15}100%{opacity:0}}
+  .ctaBody{position:relative;display:flex;align-items:center;gap:12px;height:92px;padding:0 26px 0 32px;border-radius:999px;
+    background:linear-gradient(180deg,#f2ff80 0%,#d8f63e 52%,#bde424 100%);
+    box-shadow:0 12px 24px rgba(8,36,84,.38),inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(80,110,0,.22);
+    color:#0b1a33;font:800 36px/1 Montserrat,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+    letter-spacing:-.01em;white-space:nowrap;}
+  .ctaBody svg{flex:none;width:22px;height:30px;}
+  .cta:focus{outline:none}
+  .cta:focus-visible .ctaBody{outline:4px solid #fff;outline-offset:4px;}
+
   .stage.loading *{animation-play-state:paused!important}   /* everything waits for the images */
 
   @media (prefers-reduced-motion:reduce){
@@ -194,6 +228,13 @@
     </div>
 
     <div class="girl"><img src="assets/girl.png" alt=""></div>
+
+    <a class="cta" href="https://arax.md" target="_blank" rel="noopener">
+      <span class="ctaHover"><span class="ctaPulse">
+        <span class="ctaGlow"></span>
+        <span class="ctaBody">Conectează-te acum<svg viewBox="0 0 22 30" aria-hidden="true"><path d="M5 4l11 11L5 26" fill="none" stroke="#0b1a33" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </span></span>
+    </a>
    </div>
   </div>
 </div>
@@ -290,7 +331,10 @@
   const freezeAt=new URLSearchParams(location.search).get("t"); // debug: ?t=1.6 freezes the whole timeline
   const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const allImgs=[...document.querySelectorAll(".stage img")];
-  Promise.all(allImgs.map(i=>i.decode().catch(()=>{}))).then(()=>{
+  const fontReady=document.fonts&&document.fonts.load
+    ? Promise.race([document.fonts.load("800 36px Montserrat","Conectează-te acum"),new Promise(r=>setTimeout(r,1500))]).catch(()=>{})
+    : Promise.resolve();
+  Promise.all(allImgs.map(i=>i.decode().catch(()=>{})).concat(fontReady)).then(()=>{
     stage.classList.remove("loading");
     if(!reduceMotion&&typeof Element.prototype.animate==='function')
       scripted.forEach(([el,keyframes,options])=>el.animate(keyframes,options));
