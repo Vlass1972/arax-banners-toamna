@@ -64,8 +64,8 @@ const FORMATS = [
   {
     id: '300x600', w: 300, h: 600, leaves: 22,
     cloud: { x: 22, y: 70, w: 1040 },
-    girl: { x: 150, y: 642, w: 1000 },
-    cta: { x: 36, y: 1590, font: 44 },
+    girl: { x: 150, y: 722, w: 1000 },
+    cta: { x: 36, y: 1670, font: 44 },
     deLa: { font: 36 },
     label: { left: 40, bottom: 56, font: 40 },
     placeholderPosition: 'centre',
