@@ -5,19 +5,20 @@
 <title>ARAX Google Ads</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root{--bg:#f4f5f7;--fg:#141821;--muted:#5d6472;--card:#fff;--line:#dfe2e8;--accent:#1f5fd6}
-  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#11141a;--fg:#e9ecf2;--muted:#9aa3b2;--card:#1a1f28;--line:#2a313d;--accent:#7fb0ff}}
-  :root[data-theme="dark"]{--bg:#11141a;--fg:#e9ecf2;--muted:#9aa3b2;--card:#1a1f28;--line:#2a313d;--accent:#7fb0ff}
+  :root{--bg:#f4f5f7;--fg:#141821;--muted:#5d6472;--card:#fff;--line:#dfe2e8;--accent:#1f5fd6;--warn:#b42318}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#11141a;--fg:#e9ecf2;--muted:#9aa3b2;--card:#1a1f28;--line:#2a313d;--accent:#7fb0ff;--warn:#ff8a7a}}
+  :root[data-theme="dark"]{--bg:#11141a;--fg:#e9ecf2;--muted:#9aa3b2;--card:#1a1f28;--line:#2a313d;--accent:#7fb0ff;--warn:#ff8a7a}
   html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif}
-  main{max-width:900px;margin:0 auto;padding:24px 16px 48px}
+  main{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
   h1{font-size:20px;margin:0 0 4px}
   p.sub{margin:0 0 24px;color:var(--muted)}
   .row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .card h2{font-size:15px;margin:0 0 12px;display:flex;justify-content:space-between;gap:12px}
-  .card h2 span{color:var(--muted);font-weight:400}
-  iframe{display:block;border:0;background:#000}
-  .actions{display:flex;gap:12px;margin-top:12px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:100%;box-sizing:border-box}
+  .card h2{font-size:15px;margin:0 0 2px}
+  .meta{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .meta.bad{color:var(--warn)}
+  iframe{display:block;border:0;background:#000;max-width:100%}
+  .actions{display:flex;gap:12px;margin-top:12px;font-size:14px;align-items:center}
   button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
   a{color:var(--accent)}
 </style>
@@ -26,22 +27,26 @@
 <main>
   <h1>ARAX toamna: Google Ads HTML5</h1>
   <p class="sub">Объявления в реальном размере. Анимация останавливается на 27-й секунде.</p>
-  <div class="row">
-    <div class="card">
-      <h2>300×250 <span id="s300x250"></span></h2>
-      <iframe id="f300x250" src="dist/300x250/index.html" width="300" height="250" title="300x250"></iframe>
-      <div class="actions"><button data-f="f300x250">Повторить</button><a href="dist/arax-toamna-300x250.zip" download>Скачать ZIP</a></div>
-    </div>
-    <div class="card">
-      <h2>300×600 <span id="s300x600"></span></h2>
-      <iframe id="f300x600" src="dist/300x600/index.html" width="300" height="600" title="300x600"></iframe>
-      <div class="actions"><button data-f="f300x600">Повторить</button><a href="dist/arax-toamna-300x600.zip" download>Скачать ZIP</a></div>
-    </div>
-  </div>
+  <div class="row" id="row"><p class="meta">Загружаю отчёт сборки…</p></div>
 </main>
 <script>
-  document.querySelectorAll('button[data-f]').forEach(b=>b.addEventListener('click',()=>{const f=document.getElementById(b.dataset.f);f.src=f.src;}));
-  fetch('dist/report.json').then(r=>r.json()).then(rep=>rep.forEach(x=>{const el=document.getElementById('s'+x.format);if(el)el.textContent='ZIP '+x.zip+(x.ok?'':' · есть замечания');})).catch(()=>{});
+  const row=document.getElementById('row');
+  const bgName=r=>{const n=(r.notes||[]).find(x=>x.startsWith('background:'));return n?n.replace('background: assets/',''):''};
+  fetch('dist/report.json',{cache:'no-store'}).then(r=>r.json()).then(rep=>{
+    row.textContent='';
+    rep.forEach(r=>{
+      const [w,h]=[r.w||+r.format.split('x')[0],r.h||+r.format.split('x')[1].split('-')[0]];
+      const card=document.createElement('div');card.className='card';
+      const title=document.createElement('h2');title.textContent=r.format.replace(/^(\d+)x(\d+)/,'$1×$2');
+      const meta=document.createElement('p');meta.className='meta'+(r.ok?'':' bad');
+      meta.textContent=['ZIP '+r.zip,bgName(r),r.ok?'':'есть замечания'].filter(Boolean).join(' · ');
+      const frame=document.createElement('iframe');frame.width=w;frame.height=h;frame.title=r.format;frame.src='dist/'+r.format+'/index.html';
+      const actions=document.createElement('div');actions.className='actions';
+      const replay=document.createElement('button');replay.textContent='Повторить';replay.onclick=()=>{frame.src=frame.src};
+      const dl=document.createElement('a');dl.href='dist/arax-toamna-'+r.format+'.zip';dl.download='';dl.textContent='Скачать ZIP';
+      actions.append(replay,dl);card.append(title,meta,frame,actions);row.append(card);
+    });
+  }).catch(()=>{row.innerHTML='<p class="meta bad">Не удалось загрузить dist/report.json</p>'});
 </script>
 </body>
 </html>

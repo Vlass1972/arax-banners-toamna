@@ -1,6 +1,8 @@
 [
   {
     "format": "300x250",
+    "w": 300,
+    "h": 250,
     "zip": "355.1 KB",
     "zipBytes": 363602,
     "ok": true,
@@ -24,7 +26,35 @@
     }
   },
   {
+    "format": "300x250-2",
+    "w": 300,
+    "h": 250,
+    "zip": "313.3 KB",
+    "zipBytes": 320817,
+    "ok": true,
+    "quality": {
+      "rung": 0,
+      "bgQ": 92,
+      "girlD": 3,
+      "girlQ": 90,
+      "cloudD": 3
+    },
+    "problems": [],
+    "notes": [
+      "background: assets/bg-600x500-HQ-2.jpg"
+    ],
+    "sizes": {
+      "bg.jpg": "127.6 KB",
+      "cloud.png": "68.9 KB",
+      "girl-a.png": "17.6 KB",
+      "girl.jpg": "94.3 KB",
+      "index.html": "22.4 KB"
+    }
+  },
+  {
     "format": "300x600",
+    "w": 300,
+    "h": 600,
     "zip": "564.5 KB",
     "zipBytes": 578073,
     "ok": true,

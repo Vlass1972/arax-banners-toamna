@@ -51,18 +51,21 @@ const CLOUD = { w: 1085, h: 1449,
 const SW = 1085;                       // design width of every format
 
 // ----- per-format layout, in design units (stage is 1085 wide) -----
+// id names the output folder and zip; bg is the background for that version (2x of the ad size).
+const LAYOUT_300x250 = {
+  w: 300, h: 250, leaves: 14,
+  cloud: { x: 120, y: 0, w: 660 },
+  girl: { x: 560, y: 110, w: 600 },
+  cta: { x: 30, y: 712, font: 42 },
+  deLa: { font: 34 },
+  label: { right: 34, top: 26, font: 40 },
+  placeholderPosition: 'bottom',
+};
 const FORMATS = [
+  { id: '300x250', bg: 'assets/bg-600x500-HQ.jpg', ...LAYOUT_300x250 },
+  { id: '300x250-2', bg: 'assets/bg-600x500-HQ-2.jpg', ...LAYOUT_300x250 },
   {
-    id: '300x250', w: 300, h: 250, leaves: 14,
-    cloud: { x: 120, y: 0, w: 660 },
-    girl: { x: 560, y: 110, w: 600 },
-    cta: { x: 30, y: 712, font: 42 },
-    deLa: { font: 34 },
-    label: { right: 34, top: 26, font: 40 },
-    placeholderPosition: 'bottom',
-  },
-  {
-    id: '300x600', w: 300, h: 600, leaves: 22,
+    id: '300x600', bg: 'assets/bg-600x1200-HQ.jpg', w: 300, h: 600, leaves: 22,
     cloud: { x: 22, y: 70, w: 1040 },
     girl: { x: 150, y: 722, w: 1000 },
     cta: { x: 36, y: 1670, font: 44 },
@@ -197,11 +200,18 @@ function bleed(data, W, H) {
 }
 
 function ownBackground(f) {
+  if (f.bg) {                                    // explicit per version
+    const p = path.join(ROOT, f.bg);
+    if (!fs.existsSync(p)) throw new Error(`${f.id}: background not found: ${f.bg}`);
+    return p;
+  }
   const bgW = f.w * BG_DENSITY, bgH = f.h * BG_DENSITY;
-  // google/src/bg-300x250.jpg, or assets/bg-600x500*.jpg (the 2x size in the name); png also fine
-  return ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p))
-    || fs.readdirSync(path.join(ROOT, 'assets')).filter(n => n.startsWith(`bg-${bgW}x${bgH}`) && /\.(png|jpe?g)$/i.test(n))
-      .map(n => path.join(ROOT, 'assets', n))[0];
+  // otherwise google/src/bg-300x250.jpg, or the single assets/bg-600x500*.jpg (the 2x size in the name)
+  const src = ['png', 'jpg', 'jpeg'].map(e => path.join(SRC, `bg-${f.id}.${e}`)).find(p => fs.existsSync(p));
+  if (src) return src;
+  const found = fs.readdirSync(path.join(ROOT, 'assets')).filter(n => n.startsWith(`bg-${bgW}x${bgH}`) && /\.(png|jpe?g)$/i.test(n));
+  if (found.length > 1) throw new Error(`${f.id}: several backgrounds match (${found.join(', ')}), set "bg" for this version`);
+  return found[0] && path.join(ROOT, 'assets', found[0]);
 }
 
 async function images(f, G, dir, q) {
@@ -310,7 +320,7 @@ function validate(f, G, dir, zipSize) {
     }
     const { files, problems } = validate(f, G, dir, zipSize);
     const sizes = Object.fromEntries(files.map(n => [n, kb(fs.statSync(path.join(dir, n)).size)]));
-    report.push({ format: f.id, zip: kb(zipSize), zipBytes: zipSize, ok: problems.length === 0, quality: { rung, ...QUALITY_LADDER[rung] }, problems, notes, sizes });
+    report.push({ format: f.id, w: f.w, h: f.h, zip: kb(zipSize), zipBytes: zipSize, ok: problems.length === 0, quality: { rung, ...QUALITY_LADDER[rung] }, problems, notes, sizes });
   }
   fs.writeFileSync(path.join(DIST, 'report.json'), JSON.stringify(report, null, 2));
   for (const r of report) {
