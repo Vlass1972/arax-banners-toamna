@@ -1,0 +1,7 @@
+{
+  "name": "arax-toamna-google-ads",
+  "private": true,
+  "description": "Builds Google Ads HTML5 zips (300x250, 300x600) from ../index.html",
+  "scripts": { "build": "node build.js" },
+  "devDependencies": { "sharp": "^0.34.0" }
+}

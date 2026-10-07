@@ -1,0 +1,32 @@
+[
+  {
+    "format": "300x250",
+    "zip": "136.4 KB",
+    "ok": true,
+    "problems": [],
+    "notes": [
+      "PLACEHOLDER background cut from assets/bg.png"
+    ],
+    "sizes": {
+      "bg.jpg": "67.2 KB",
+      "cloud.png": "34.8 KB",
+      "girl.png": "27.4 KB",
+      "index.html": "21.9 KB"
+    }
+  },
+  {
+    "format": "300x600",
+    "zip": "219.5 KB",
+    "ok": true,
+    "problems": [],
+    "notes": [
+      "PLACEHOLDER background cut from assets/bg.png"
+    ],
+    "sizes": {
+      "bg.jpg": "76.1 KB",
+      "cloud.png": "74.6 KB",
+      "girl.png": "61.8 KB",
+      "index.html": "21.9 KB"
+    }
+  }
+]

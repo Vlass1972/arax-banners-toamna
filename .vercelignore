@@ -7,3 +7,5 @@ assets/reference.jpg
 *.mp4
 *.docx
 _tmp_*
+google/node_modules
+google/src
