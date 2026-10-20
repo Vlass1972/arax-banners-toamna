@@ -160,7 +160,7 @@
 
   /* ---------- call to action: slides in from the left under the raised leg once the intro is over ---------- */
   .cta{position:absolute;left:12px;top:1136px;padding:14px;display:block;text-decoration:none;   /* padding = bigger tap area */
-    -webkit-tap-highlight-color:transparent;opacity:0;will-change:transform,opacity;
+    -webkit-tap-highlight-color:transparent;opacity:0;
     animation: ctaIn .8s 2.6s forwards;}                          /* girl is at the top of her bounce here */
   @keyframes ctaIn{
     0%  {opacity:0;transform:translateX(-640px) skewX(-14deg);animation-timing-function:cubic-bezier(.15,.85,.3,1)}
@@ -168,17 +168,16 @@
     68% {opacity:1;transform:translateX(18px) skewX(5deg);animation-timing-function:ease-in-out}
     100%{opacity:1;transform:translateX(0) skewX(0)}
   }
-  .ctaHover{display:block;transition:transform .2s ease;will-change:transform;}
+  .ctaHover{display:block;transition:transform .2s ease;}
   @media (hover:hover){ .cta:hover .ctaHover{transform:scale(1.04)} }
-  /* pulse + glow in step with the girl's touch-down (same 3.2s beat as the floor rings) */
-  .ctaPulse{display:block;position:relative;will-change:transform;
-    animation: ctaPulse 3.2s ease-out 4.25s infinite;}
-  @keyframes ctaPulse{0%{transform:scale(1)}9%{transform:scale(1.06)}26%{transform:scale(1)}100%{transform:scale(1)}}
-  .ctaGlow{position:absolute;inset:0;border-radius:999px;opacity:0;pointer-events:none;will-change:opacity;
-    box-shadow:0 0 28px 8px rgba(220,255,70,.8),0 0 56px 16px rgba(110,210,255,.35);
-    animation: ctaGlowOnce .7s ease-out 3.25s, ctaGlow 3.2s ease-out 4.25s infinite;}
+  /* pulse + glow in step with the girl's touch-down (same 3.2s beat as the floor rings), played by the script as
+     short one-shot animations. The button has no will-change: between beats it is not a GPU layer, so its text is
+     painted crisp instead of being a stretched bitmap at a fractional pixel offset. */
+  .ctaPulse{display:block;position:relative;}
+  .ctaGlow{position:absolute;inset:0;z-index:1;border-radius:999px;opacity:0;pointer-events:none;
+    box-shadow:0 0 28px 8px rgba(220,255,70,.8),0 0 56px 16px rgba(110,210,255,.35);   /* outer shadow only: drawn over the button, never over the text */
+    animation: ctaGlowOnce .7s ease-out 3.25s;}
   @keyframes ctaGlowOnce{0%{opacity:0}25%{opacity:.9}100%{opacity:0}}
-  @keyframes ctaGlow{0%{opacity:0}8%{opacity:1}50%{opacity:.15}100%{opacity:0}}
   .ctaBody{position:relative;display:flex;align-items:center;gap:12px;height:92px;padding:0 26px 0 32px;border-radius:999px;
     background:linear-gradient(180deg,#f2ff80 0%,#d8f63e 52%,#bde424 100%);
     box-shadow:0 12px 24px rgba(8,36,84,.38),inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(80,110,0,.22);
@@ -347,12 +346,21 @@
         const an=el.animate(keyframes,options);
         if(removeWhenDone)an.onfinish=()=>el.remove();   // burst bits are invisible once done: free their layers
       });
+    // CTA beat: pulse + glow on each of the girl's touch-downs (girlIdle restarts there, every 3.2s from 4.25s),
+    // so it stays on the rings' beat
+    const SETTLE=1500;
+    const pulse=stage.querySelector(".ctaPulse"), glow=stage.querySelector(".ctaGlow"), girl=stage.querySelector(".girl");
+    const beatEnd=CFG.stopAt?CFG.stopAt*1000-SETTLE-100-830:Infinity;   // ad builds: no beat may still run when the frame settles
+    if(typeof Element.prototype.animate==='function')girl.addEventListener("animationiteration",e=>{
+      if(e.animationName!=="girlIdle"||(1.05+e.elapsedTime)*1000>beatEnd)return;
+      pulse.animate([{transform:"scale(1)",easing:"ease-out"},{transform:"scale(1.06)",offset:.35,easing:"ease-out"},{transform:"scale(1)"}],{duration:830});
+      glow.animate([{opacity:0,easing:"ease-out"},{opacity:1,offset:.16,easing:"ease-out"},{opacity:0}],{duration:1600});
+    });
     if(freezeAt!==null)document.getAnimations().forEach(an=>{an.pause();an.currentTime=+freezeAt*1000;});
     // ad builds: everything holds still after CFG.stopAt seconds (Google Ads: animation must stop within 30s)
     // The loops first ease to their rest pose, so the last frame is not frozen mid-tilt or mid-zoom,
     // then the GPU layers are dropped: the browser repaints that frame at its real scale, crisp.
     else if(CFG.stopAt){
-      const SETTLE=1500;
       setTimeout(()=>{
         [[".bg","transform"],[".cloudWrap","transform"],[".girl","transform"],[".ctaPulse","transform"],
          [".shine i","opacity"],[".ctaGlow","opacity"]].forEach(([sel,prop])=>{
