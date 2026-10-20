@@ -379,7 +379,26 @@
       });
     if(freezeAt!==null)document.getAnimations().forEach(an=>{an.pause();an.currentTime=+freezeAt*1000;});
     // ad builds: everything holds still after CFG.stopAt seconds (Google Ads: animation must stop within 30s)
-    else if(CFG.stopAt)setTimeout(()=>document.getAnimations().forEach(an=>an.pause()),CFG.stopAt*1000);
+    // The loops first ease to their rest pose, so the last frame is not frozen mid-tilt or mid-zoom,
+    // then the GPU layers are dropped: the browser repaints that frame at its real scale, crisp.
+    else if(CFG.stopAt){
+      const SETTLE=1500;
+      setTimeout(()=>{
+        [[".bg","transform"],[".cloudWrap","transform"],[".girl","transform"],[".ctaPulse","transform"],
+         [".shine i","opacity"],[".ctaGlow","opacity"]].forEach(([sel,prop])=>{
+          const el=stage.querySelector(sel);if(!el)return;
+          const cur=getComputedStyle(el)[prop], rest=prop==="opacity"?"0":"none";
+          el.getAnimations().forEach(an=>an.cancel());
+          if(sel===".girl")el.style.opacity="1";        // girlIn no longer holds her visible
+          el.style[prop]=rest;
+          if(typeof el.animate==='function')el.animate([{[prop]:cur},{[prop]:rest}],{duration:SETTLE,easing:"ease-in-out"});
+        });
+      },CFG.stopAt*1000-SETTLE-100);
+      setTimeout(()=>{
+        document.getAnimations().forEach(an=>an.pause());
+        [stage,...stage.querySelectorAll("*")].forEach(el=>{el.style.willChange="auto";});
+      },CFG.stopAt*1000);
+    }
   });
 })();
 </script>
