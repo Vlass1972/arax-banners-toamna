@@ -56,7 +56,7 @@ const LAYOUT_300x250 = {
   w: 300, h: 250, leaves: 14,
   cloud: { x: 120, y: 0, w: 660 },
   girl: { x: 560, y: 110, w: 600 },
-  cta: { x: 30, y: 712, font: 42 },
+  cta: { x: 30, y: 712, font: 42, text: 47 },   // font sizes the button, text is the label (13 px on screen)
   deLa: { font: 32, x: 14.5 },          // gap between the swoosh and the 6 is only ~88 units here; keep clear of the 6
   label: null,                          // "arax.md" removed at the user's request (see the policy note in the report)
   placeholderPosition: 'bottom',
@@ -68,7 +68,7 @@ const FORMATS = [
     id: '300x600', bg: 'assets/bg-600x1200-HQ.jpg', w: 300, h: 600, leaves: 22,
     cloud: { x: 22, y: 70, w: 1040 },
     girl: { x: 150, y: 722, w: 1000 },
-    cta: { x: 36, y: 1670, font: 44 },
+    cta: { x: 26, y: 1670, font: 40, text: 46 },   // slimmer button so the bigger label still clears the standing leg
     deLa: { font: 36 },
     label: null,                        // "arax.md" removed at the user's request (see the policy note in the report)
     placeholderPosition: 'centre',
@@ -122,7 +122,9 @@ function geometry(f) {
     h: Math.round(fs_ * 2.55), padL: Math.round(fs_ * .9), padR: Math.round(fs_ * .72), gap: Math.round(fs_ * .33),
     arrowW: Math.round(fs_ * .6), arrowH: Math.round(fs_ * .82), g,
   };
-  cta.w = cta.padL + fs_ * 10.77 + cta.gap + cta.arrowW + cta.padR;   // Montserrat 800, measured: 10.95 x font size, minus letter-spacing
+  cta.text = f.cta.text || fs_;
+  // label is Montserrat 700 with +.01em letter-spacing (measured 10.95 x font size): at ~12 px the 800 cut closes up and looks blurry
+  cta.w = cta.padL + cta.text * 10.95 + cta.gap + cta.arrowW + cta.padR;
   return { H, scale, cs, cloudH, stackTop, k, gs, tip, ox, oy, foot, legX, cta };
 }
 
@@ -150,7 +152,7 @@ function css(f, G) {
   .pair{left:${r2(G.foot[0] - 375 * G.gs)}px;top:${r2(G.foot[1] - 125 * G.gs)}px;width:${r2(750 * G.gs)}px;height:${r2(250 * G.gs)}px}
   .floorGlow{left:${r2(G.foot[0])}px;top:${r2(G.foot[1])}px;width:${r2(700 * G.gs)}px;height:${r2(190 * G.gs)}px}
   .cta{left:${f.cta.x - 14}px;top:${f.cta.y - 14}px;cursor:pointer}
-  .ctaBody{height:${c.h}px;padding:0 ${c.padR}px 0 ${c.padL}px;gap:${c.gap}px;font-size:${f.cta.font}px}
+  .ctaBody{height:${c.h}px;padding:0 ${c.padR}px 0 ${c.padL}px;gap:${c.gap}px;font-size:${c.text}px;font-weight:700;letter-spacing:.01em}
   .ctaBody svg{width:${c.arrowW}px;height:${c.arrowH}px}
   .ctaGlow{box-shadow:0 0 ${r2(28 * c.g)}px ${r2(8 * c.g)}px rgba(220,255,70,.8),0 0 ${r2(56 * c.g)}px ${r2(16 * c.g)}px rgba(110,210,255,.35)}
   @keyframes ctaIn{
@@ -299,18 +301,19 @@ async function cloudWithoutDeLa() {
   return (cloudRaw = data);
 }
 
+const CTA_TEXT = 'Conectează-te acum';   // button label, Montserrat 700
 // Characters the ad needs from Montserrat 800 (button, "de la", optional label).
 function fontText(f) { return 'Conectează-te acum de la' + (f.label ? ' arax.md' : ''); }
 
 // Montserrat 800 (SIL Open Font License), subset to the given text, as an inline @font-face.
 // Downloaded once from Google Fonts and cached in google/src, so later builds work offline.
-async function embeddedFont(text) {
+async function embeddedFont(text, weight = 800) {
   const chars = [...new Set(text)].sort().join('');
   const key = require('crypto').createHash('sha1').update(chars).digest('hex').slice(0, 10);
-  const cache = path.join(SRC, `montserrat-800-${key}.woff2`);
+  const cache = path.join(SRC, `montserrat-${weight}-${key}.woff2`);
   if (!fs.existsSync(cache)) {
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
-    const cssUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=block&text=' + encodeURIComponent(chars);
+    const cssUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@' + weight + '&display=block&text=' + encodeURIComponent(chars);
     const css = await (await fetch(cssUrl, { headers: { 'User-Agent': ua } })).text();
     const m = css.match(/url\((https:[^)]+)\)\s*format\('woff2'\)/);
     if (!m) throw new Error('could not find a woff2 font in the Google Fonts response');
@@ -319,7 +322,7 @@ async function embeddedFont(text) {
     fs.writeFileSync(cache, font);
   }
   const b64 = fs.readFileSync(cache).toString('base64');
-  return `@font-face{font-family:'Montserrat';font-style:normal;font-weight:800;font-display:block;src:url(data:font/woff2;base64,${b64}) format('woff2')}`;
+  return `@font-face{font-family:'Montserrat';font-style:normal;font-weight:${weight};font-display:block;src:url(data:font/woff2;base64,${b64}) format('woff2')}`;
 }
 
 function zip(dir, file) {
@@ -359,7 +362,7 @@ function validate(f, G, dir, zipSize) {
     const dir = path.join(DIST, f.id);
     const zipFile = path.join(DIST, `arax-toamna-${f.id}.zip`);
     let zipSize = 0, notes = [], rung = -1;
-    const fontCss = await embeddedFont(fontText(f));
+    const fontCss = await embeddedFont(fontText(f)) + await embeddedFont(CTA_TEXT, 700);
     for (let i = 0; i < QUALITY_LADDER.length; i++) {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.mkdirSync(dir, { recursive: true });
