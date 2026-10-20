@@ -62,8 +62,7 @@ const LAYOUT_300x250 = {
   placeholderPosition: 'bottom',
 };
 const FORMATS = [
-  { id: '300x250', bg: 'assets/bg-600x500-HQ.jpg', ...LAYOUT_300x250 },
-  { id: '300x250-2', bg: 'assets/bg-600x500-HQ-2.jpg', ...LAYOUT_300x250 },
+  { id: '300x250', bg: 'assets/bg-600x500-HQ-2.jpg', ...LAYOUT_300x250 },   // the earlier bg-600x500-HQ.jpg version was dropped on 2026-10-20
   {
     id: '300x600', bg: 'assets/bg-600x1200-HQ.jpg', w: 300, h: 600, leaves: 22,
     cloud: { x: 22, y: 70, w: 1040 },

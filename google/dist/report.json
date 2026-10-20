@@ -3,35 +3,8 @@
     "format": "300x250",
     "w": 300,
     "h": 250,
-    "zip": "365.6 KB",
-    "zipBytes": 374348,
-    "ok": true,
-    "quality": {
-      "rung": 0,
-      "bgQ": 92,
-      "girlD": 3,
-      "girlQ": 90,
-      "cloudD": 3
-    },
-    "problems": [],
-    "notes": [
-      "background: assets/bg-600x500-HQ.jpg",
-      "policy risk: no advertiser name, logo or URL on the final frame (Google Ads \"Unidentified business\")"
-    ],
-    "sizes": {
-      "bg.jpg": "169.4 KB",
-      "cloud.png": "68.9 KB",
-      "girl-a.png": "17.6 KB",
-      "girl.jpg": "94.3 KB",
-      "index.html": "36.2 KB"
-    }
-  },
-  {
-    "format": "300x250-2",
-    "w": 300,
-    "h": 250,
     "zip": "323.8 KB",
-    "zipBytes": 331563,
+    "zipBytes": 331562,
     "ok": true,
     "quality": {
       "rung": 0,
