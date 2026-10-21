@@ -52,5 +52,32 @@
       "girl.jpg": "151.7 KB",
       "index.html": "36.2 KB"
     }
+  },
+  {
+    "format": "240x400",
+    "w": 240,
+    "h": 400,
+    "zip": "425.3 KB",
+    "zipBytes": 435477,
+    "ok": true,
+    "quality": {
+      "rung": 0,
+      "bgQ": 92,
+      "girlD": 3,
+      "girlQ": 90,
+      "cloudD": 3
+    },
+    "problems": [],
+    "notes": [
+      "background: assets/bg-600x1200-HQ.jpg",
+      "policy risk: no advertiser name, logo or URL on the final frame (Google Ads \"Unidentified business\")"
+    ],
+    "sizes": {
+      "bg.jpg": "187.9 KB",
+      "cloud.png": "95.8 KB",
+      "girl-a.png": "20.0 KB",
+      "girl.jpg": "106.6 KB",
+      "index.html": "36.2 KB"
+    }
   }
 ]

@@ -74,6 +74,17 @@ const FORMATS = [
     // edge darkening baked into the background only (more contrast for the clouds and the button)
     shade: { top: { to: 0.5, alpha: 0.24, color: [4, 14, 38] }, bottom: { from: 0.72, alpha: 0.28, color: [8, 6, 4] } },
   },
+  {
+    // cut from the 300x600 background: same width, the empty sky at the top goes (bgPosition 'bottom')
+    id: '240x400', bg: 'assets/bg-600x1200-HQ.jpg', bgPosition: 'bottom', w: 240, h: 400, leaves: 18,
+    cloud: { x: 40, y: 6, w: 1000 },
+    girl: { x: 360, y: 638, w: 820 },
+    cta: { x: 24, y: 1416, font: 46, text: 54 },   // 12 px label on screen
+    deLa: { font: 36 },
+    label: null,
+    placeholderPosition: 'bottom',
+    shade: { top: { to: 0.5, alpha: 0.24, color: [4, 14, 38] }, bottom: { from: 0.72, alpha: 0.28, color: [8, 6, 4] } },
+  },
 ];
 
 // Soft top/bottom gradient as an SVG overlay; eased stops so no edge of the gradient is visible.
@@ -246,7 +257,7 @@ async function images(f, G, dir, q) {
   // background: exact ad size at 2x, JPEG with full colour resolution
   const bgW = f.w * BG_DENSITY, bgH = f.h * BG_DENSITY, own = ownBackground(f);
   notes.push(own ? 'background: ' + path.relative(ROOT, own).split(path.sep).join('/') : 'PLACEHOLDER background cut from assets/bg.png');
-  let bg = sharp(own || path.join(ROOT, 'assets', 'bg.png')).resize(bgW, bgH, { fit: 'cover', position: own ? 'centre' : f.placeholderPosition });
+  let bg = sharp(own || path.join(ROOT, 'assets', 'bg.png')).resize(bgW, bgH, { fit: 'cover', position: own ? (f.bgPosition || 'centre') : f.placeholderPosition });
   if (f.shade) bg = bg.composite([{ input: shadeSVG(bgW, bgH, f.shade), top: 0, left: 0 }]);
   await bg.jpeg({ quality: q.bgQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'bg.jpg'));
   // girl: true-colour JPEG + alpha mask (palette PNG of one colour with 256 alpha levels: exact and small)
