@@ -138,7 +138,7 @@ function geometry(f) {
   return { H, scale, cs, cloudH, stackTop, k, gs, tip, ox, oy, foot, legX, cta };
 }
 
-function css(f, G) {
+function css(f, G, M) {
   const c = G.cta, L = f.label, D = { x: 15.2, y: 41, ...f.deLa };
   const labelCss = !L ? '' : `
   /* advertiser identification on the final frame (Google Ads "Unidentified business" policy) */
@@ -155,9 +155,11 @@ function css(f, G) {
   .fog img{filter:blur(${r2(22 * G.cs)}px)}
   .flash{width:${r2(260 * G.cs)}px;height:${r2(260 * G.cs)}px;margin:${r2(-130 * G.cs)}px 0 0 ${r2(-130 * G.cs)}px}
   .girl{left:${f.girl.x}px;top:${f.girl.y}px;width:${f.girl.w}px}
-  /* girl = true-colour JPEG + alpha mask; the shadow sits on a static wrapper so it is painted once */
+  /* girl = true-colour JPEG + alpha mask; the shadow sits on a static wrapper so it is painted once.
+     Both masks are data URIs: ad servers rewrite <img src> to their CDN but resolve CSS url() against the wrong
+     folder (seen on Eskimi via point.md, 2026-10-23), which left the girl invisible when girl-a.png was a file */
   .girl .gs{filter:drop-shadow(0 30px 30px rgba(0,20,60,.35))}
-  .girl img{filter:none;-webkit-mask-image:url(girl-a.png);mask-image:url(girl-a.png);
+  .girl img{filter:none;-webkit-mask-image:url(${M.girl});mask-image:url(${M.girl});
     -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
   .pair{left:${r2(G.foot[0] - 375 * G.gs)}px;top:${r2(G.foot[1] - 125 * G.gs)}px;width:${r2(750 * G.gs)}px;height:${r2(250 * G.gs)}px}
   .floorGlow{left:${r2(G.foot[0])}px;top:${r2(G.foot[1])}px;width:${r2(700 * G.gs)}px;height:${r2(190 * G.gs)}px}
@@ -180,7 +182,7 @@ function css(f, G) {
 `;
 }
 
-function html(f, G, fontCss) {
+function html(f, G, fontCss, M) {
   let s = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   s = rep(s, '<meta charset="utf-8">', `<meta charset="utf-8">\n<meta name="ad.size" content="width=${f.w},height=${f.h}">`);
   // web font travels inside the HTML (base64 woff2): font files are not an allowed zip type and external links are rejected
@@ -188,6 +190,8 @@ function html(f, G, fontCss) {
   s = s.replace(/<!-- Montserrat 800[^>]*-->\n<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2[^"]*">\n/, () => `<style>${fontCss}</style>\n`);
   if (/fonts\.googleapis|fonts\.gstatic/.test(s)) throw new Error('font link still present');
   s = rep(s, 'assets/bg.png', 'bg.jpg');
+  // the shine is clipped by a small alpha copy of the clouds, inline like the girl mask
+  s = rep(s, '-webkit-mask-image:url(assets/cloud.png);mask-image:url(assets/cloud.png);', `-webkit-mask-image:url(${M.shine});mask-image:url(${M.shine});`, 'shine mask');
   s = rep(s, 'assets/cloud.png', 'cloud.png');
   s = rep(s, '<div class="girl"><img src="assets/girl.png" alt=""></div>',
     '<div class="girl"><div class="gs"><img src="girl.jpg" alt=""></div></div>', 'girl');
@@ -196,8 +200,8 @@ function html(f, G, fontCss) {
   // Google Ads makes the whole ad clickable to the final URL set in the ad; own exits are not allowed
   s = rep(s, '<a class="cta" href="https://arax.md" target="_blank" rel="noopener">', '<div class="cta">', 'cta link');
   s = rep(s, '    </a>\n   </div>', '    </div>\n' + (f.label ? '\n    <div class="adLabel">arax.md</div>\n' : '') + '   </div>', 'cta end');
-  s = rep(s, '</style>\n</head>', css(f, G) + '</style>\n</head>', 'style end');
-  const cfg = { W: SW, H: r2(G.H), leaves: f.leaves, burst: r2(G.cs), stopAt: STOP_AT, debugParam: '__arax_t', preload: ['girl-a.png'] };
+  s = rep(s, '</style>\n</head>', css(f, G, M) + '</style>\n</head>', 'style end');
+  const cfg = { W: SW, H: r2(G.H), leaves: f.leaves, burst: r2(G.cs), stopAt: STOP_AT, debugParam: '__arax_t' };
   s = rep(s, '<script>\n(function(){', `<script>window.AD_CFG=${JSON.stringify(cfg)};</script>\n<script>\n(function(){`, 'main script');
   return s;
 }
@@ -268,13 +272,26 @@ async function images(f, G, dir, q) {
     .jpeg({ quality: q.girlQ, mozjpeg: true, chromaSubsampling: '4:4:4' }).toFile(path.join(dir, 'girl.jpg'));
   const mask = Buffer.alloc(info.width * info.height * 4);
   for (let i = 0; i < alpha.length; i++) mask[i * 4 + 3] = alpha[i];
-  await sharp(mask, { raw: { width: info.width, height: info.height, channels: 4 } })
-    .png({ palette: true, quality: 100, dither: 0, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'girl-a.png'));
+  const girlMask = await alphaPng(mask, info.width, info.height, 96);
   // clouds: palette PNG keeps the transparency and is near-lossless for this white/blue art
   const cloudPx = Math.round(f.cloud.w * G.scale * q.cloudD);
   await sharp(await cloudWithoutDeLa(), { raw: { width: CLOUD.w, height: CLOUD.h, channels: 4 } }).resize({ width: cloudPx })
     .png({ palette: true, quality: 100, effort: 10, compressionLevel: 9 }).toFile(path.join(dir, 'cloud.png'));
-  return notes;
+  // shine mask: the clouds' alpha at screen resolution (the shine is a soft bar, so this needs no more)
+  const sh = await sharp(await cloudWithoutDeLa(), { raw: { width: CLOUD.w, height: CLOUD.h, channels: 4 } })
+    .resize({ width: Math.round(f.cloud.w * G.scale / 2) }).raw().toBuffer({ resolveWithObject: true });
+  const shMask = Buffer.alloc(sh.info.width * sh.info.height * 4);
+  for (let i = 0; i < sh.info.width * sh.info.height; i++) shMask[i * 4 + 3] = sh.data[i * 4 + 3];
+  const shineMask = await alphaPng(shMask, sh.info.width, sh.info.height);
+  notes.push(`masks inline: girl ${kb(girlMask.length)}, shine ${kb(shineMask.length)}`);
+  const uri = b => 'data:image/png;base64,' + b.toString('base64');
+  return { notes, masks: { girl: uri(girlMask), shine: uri(shineMask) } };
+}
+
+// palette PNG of one colour with 256 alpha levels: exact and small
+function alphaPng(rgba, w, h, colours = 256) {
+  return sharp(rgba, { raw: { width: w, height: h, channels: 4 } })
+    .png({ palette: true, colours, quality: 100, dither: 0, effort: 10, compressionLevel: 9 }).toBuffer();
 }
 
 let cloudRaw = null;
@@ -358,7 +375,9 @@ function validate(f, G, dir, zipSize) {
   for (const m of s.matchAll(/(?:https?:)?\/\/([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g)) if (!ALLOWED_HOSTS.includes(m[1])) problems.push(`external reference: ${m[0]}`);
   if (/<a\s[^>]*href=/i.test(s)) problems.push('own click-through link present');
   if (/localStorage|sessionStorage|indexedDB/.test(s)) problems.push('storage API used');
-  for (const ref of ['bg.jpg', 'girl.jpg', 'girl-a.png', 'cloud.png']) if (!files.includes(ref)) problems.push(`missing asset: ${ref}`);
+  for (const ref of ['bg.jpg', 'girl.jpg', 'cloud.png']) if (!files.includes(ref)) problems.push(`missing asset: ${ref}`);
+  // CSS url() must not point at a file: ad servers resolve those against their own folders (girl invisible on Eskimi)
+  for (const m of s.matchAll(/url\(\s*['"]?(?!data:|#)([^'")]+)/g)) problems.push(`CSS url() to a file: ${m[1]}`);
   if (zipSize > MAX_ZIP) problems.push(`zip too big: ${(zipSize / 1000).toFixed(1)} KB > ${MAX_ZIP / 1000} KB`);
   if (f.cta.x + G.cta.w + 24 > G.legX) problems.push(`CTA (${Math.round(f.cta.x + G.cta.w)}) runs into the standing leg (${Math.round(G.legX)})`);
   return { files, problems };
@@ -376,8 +395,9 @@ function validate(f, G, dir, zipSize) {
     for (let i = 0; i < QUALITY_LADDER.length; i++) {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'index.html'), html(f, G, fontCss));
-      notes = await images(f, G, dir, QUALITY_LADDER[i]);
+      const im = await images(f, G, dir, QUALITY_LADDER[i]);
+      notes = im.notes;
+      fs.writeFileSync(path.join(dir, 'index.html'), html(f, G, fontCss, im.masks));
       if (!f.label) notes.push('policy risk: no advertiser name, logo or URL on the final frame (Google Ads "Unidentified business")');
       zipSize = zip(dir, zipFile);
       rung = i;
